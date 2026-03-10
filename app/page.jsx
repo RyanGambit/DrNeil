@@ -2,59 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 
-// ═══════════════════════════════════════════════════════════════════════
-// CONDITION DETECTION — Reads referral to determine which prompt to use
-// ═══════════════════════════════════════════════════════════════════════
-function detectCondition(referralReason, medicalHistory) {
-  const text = ((referralReason || "") + " " + (medicalHistory || "")).toLowerCase();
-
-  // BPH / LUTS keywords
-  const bphKeywords = [
-    "bph", "luts", "lower urinary tract", "urinary frequency",
-    "nocturia", "hesitancy", "weak stream", "dribbling",
-    "prostatic hyperplasia", "voiding", "urinary symptoms",
-    "incomplete emptying", "straining", "intermittency",
-    "post-void residual", "benign prostate",
-  ];
-
-  // Erectile Dysfunction keywords — expanded
-  const edKeywords = [
-    "erectile dysfunction", "erectile", "impotence",
-    "sexual dysfunction", "erection", "erections",
-    "difficulty with erection", "difficulty getting",
-    "difficulty maintaining", "unable to maintain",
-    "libido", "sexual function", "sexual health",
-    "pde5", "viagra", "cialis", "sildenafil", "tadalafil",
-    "can't get hard", "trouble getting hard",
-    "performance", "intimacy concerns",
-  ];
-
-  // Microhematuria keywords
-  const mhKeywords = [
-    "hematuria", "microhematuria", "blood in urine", "rbc in urine",
-    "red blood cells", "microscopic blood", "microscopic hematuria",
-    "urine blood", "dipstick positive", "blood in the urine",
-    "rbc", "hemoglobin in urine",
-  ];
-
-  const bphScore = bphKeywords.filter((k) => text.includes(k)).length;
-  const edScore = edKeywords.filter((k) => text.includes(k)).length;
-  const mhScore = mhKeywords.filter((k) => text.includes(k)).length;
-
-  // Also check for standalone "ED" (case-sensitive since it's an abbreviation)
-  const rawText = ((referralReason || "") + " " + (medicalHistory || ""));
-  if (/\bED\b/.test(rawText)) {
-    // Only count if not part of another word
-    return edScore + 2 >= bphScore && edScore + 2 >= mhScore ? "ed" : 
-           bphScore > mhScore ? "bph" : mhScore > 0 ? "mh" : "ed";
-  }
-
-  if (bphScore >= edScore && bphScore >= mhScore && bphScore > 0) return "bph";
-  if (edScore >= bphScore && edScore >= mhScore && edScore > 0) return "ed";
-  if (mhScore >= bphScore && mhScore >= edScore && mhScore > 0) return "mh";
-
-  return "unknown";
-}
+// Condition detection is handled server-side via /api/detect-condition
 
 const CONDITION_LABELS = {
   bph: "BPH / Lower Urinary Tract Symptoms",
@@ -531,16 +479,28 @@ export default function AskDrFleshner() {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       const text = ev.target.result;
       setRawFileText(text);
       const parsed = parsePatientFile(text);
       setPatientData(parsed);
-      const condition = detectCondition(
-        parsed.referralReason,
-        parsed.medicalHistory?.join(" ")
-      );
-      setDetectedCondition(condition);
+
+      // Detect condition server-side to keep classification logic hidden
+      try {
+        const res = await fetch("/api/detect-condition", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            referralReason: parsed.referralReason,
+            medicalHistory: parsed.medicalHistory?.join(" "),
+          }),
+        });
+        const { condition } = await res.json();
+        setDetectedCondition(condition);
+      } catch {
+        setDetectedCondition("unknown");
+      }
+
       setFileUploaded(true);
     };
     reader.readAsText(file);
@@ -948,50 +908,6 @@ export default function AskDrFleshner() {
     const conversationLog = messages
       .map((m) => `${m.role === "user" ? "PATIENT" : "DR. FLESHNER"}: ${m.text}`)
       .join("\n\n");
-
-    const soapPrompt = `You are a clinical documentation assistant. Based on the following virtual urology consultation transcript and patient referral data, generate a complete SOAP note.
-
-PATIENT REFERRAL DATA:
-${initialContextRef.current}
-
-CONSULTATION TRANSCRIPT:
-${conversationLog}
-
-Generate a structured SOAP note with these sections. Use proper clinical language and be thorough:
-
-S (Subjective):
-- Chief complaint and HPI
-- IPSS score and individual question scores (if administered)
-- QoL score
-- Phenotype identified
-- Symptom timeline and trajectory
-- Impact in patient's words
-- Treatment preference
-
-O (Objective):
-- PSA value and date
-- Urinalysis and date
-- Imaging findings (prostate volume, PVR)
-- DRE findings if available
-- Current medications (confirmed)
-- Allergies (confirmed)
-- Medication safety gate responses (if asked)
-
-A (Assessment):
-- Clinical impression
-- IPSS severity classification
-- Phenotype classification
-- Risk stratification
-- Eligibility for virtual prescription
-
-P (Plan):
-- Outcome chosen and rationale
-- Intervention details
-- Realistic expectations documented
-- Follow-up timing
-- Safety net documented
-
-Format the output with clear section headers. Be specific and clinical.`;
 
     try {
       const response = await fetch("/api/soap", {
