@@ -247,6 +247,8 @@ export default function AskDrFleshner() {
   const [emailSending, setEmailSending] = useState(false);
   const [clinicalState, setClinicalState] = useState(null);
   const [dashboardOpen, setDashboardOpen] = useState(true);
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef(null);
   const [conversationId] = useState(() => `consult-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -256,6 +258,62 @@ export default function AskDrFleshner() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // ── VOICE RECOGNITION ──
+  const toggleListening = () => {
+    if (isListening) {
+      recognitionRef.current?.stop();
+      return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Voice input is not supported in this browser. Please use Chrome or Edge.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "en-US";
+    recognition.interimResults = true;
+    recognition.continuous = true;
+    recognitionRef.current = recognition;
+
+    let finalTranscript = "";
+
+    recognition.onresult = (event) => {
+      let interim = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const transcript = event.results[i][0].transcript;
+        if (event.results[i].isFinal) {
+          finalTranscript += transcript;
+        } else {
+          interim = transcript;
+        }
+      }
+      setInput(finalTranscript + interim);
+    };
+
+    recognition.onend = () => {
+      setIsListening(false);
+      recognitionRef.current = null;
+    };
+
+    recognition.onerror = (event) => {
+      console.error("Speech recognition error:", event.error);
+      setIsListening(false);
+      recognitionRef.current = null;
+    };
+
+    recognition.start();
+    setIsListening(true);
+  };
+
+  // Clean up recognition on unmount or step change
+  useEffect(() => {
+    return () => {
+      recognitionRef.current?.stop();
+    };
+  }, [step]);
 
   // Waiting room animation
   const waitingSteps = [
@@ -1169,14 +1227,32 @@ Format the output with clear section headers. Be specific and clinical.`;
               <textarea
                 style={styles.chatInput}
                 value={input}
-                onChange={(e) => setInput(e.target.value)}
+                onChange={(e) => { setInput(e.target.value); }}
                 onKeyDown={handleKeyDown}
-                placeholder="Type your response..."
+                placeholder={isListening ? "Listening..." : "Type or tap the mic to speak..."}
                 rows={1}
               />
               <button
+                style={{
+                  ...styles.micBtn,
+                  background: isListening ? "#DC2626" : "#F5FBF9",
+                  borderColor: isListening ? "#DC2626" : "#D8F0EA",
+                  color: isListening ? "#FFFFFF" : "#506D65",
+                  animation: isListening ? "micPulse 1.5s ease-in-out infinite" : "none",
+                }}
+                onClick={toggleListening}
+                title={isListening ? "Stop listening" : "Start voice input"}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="9" y="1" width="6" height="12" rx="3" />
+                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                  <line x1="12" y1="19" x2="12" y2="23" />
+                  <line x1="8" y1="23" x2="16" y2="23" />
+                </svg>
+              </button>
+              <button
                 style={{ ...styles.sendBtn, opacity: input.trim() && !isLoading ? 1 : 0.4 }}
-                onClick={handleSend}
+                onClick={() => { if (isListening) recognitionRef.current?.stop(); handleSend(); }}
                 disabled={!input.trim() || isLoading}
               >
                 ↑
@@ -1898,6 +1974,20 @@ const styles = {
     flexShrink: 0,
     transition: "opacity 0.2s",
   },
+  micBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: "50%",
+    border: "1.5px solid #D8F0EA",
+    background: "#F5FBF9",
+    color: "#506D65",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+    transition: "all 0.2s",
+  },
 
   // SOAP Note Screen
   soapCard: {
@@ -2008,6 +2098,10 @@ if (typeof document !== "undefined") {
     }
     @keyframes spin {
       to { transform: rotate(360deg); }
+    }
+    @keyframes micPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
+      50% { box-shadow: 0 0 0 8px rgba(220, 38, 38, 0); }
     }
     input:focus, textarea:focus {
       border-color: #1A6B5B !important;
