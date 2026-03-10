@@ -102,7 +102,7 @@ function parsePatientFile(text) {
   data.name = extract("Patient Name", "Name");
   data.age = extract("Age");
   data.sex = extract("Sex");
-  data.mrn = extract("MRN", "Health Card");
+  data.mrn = extract("MRN", "Health Card #", "Health Card");
   data.language = extract("Primary language");
   data.pcp = extract("Primary Care Physician", "Referring Physician", "Family Physician");
   
@@ -117,15 +117,33 @@ function parsePatientFile(text) {
     : reasonUnquoted ? reasonUnquoted[1].replace(/\s+/g, " ").trim() : null;
 
   // ── BPH fields ──
-  const psaMatch = text.match(/PSA\s*\([^)]+\)[:\s]+(.+)/i);
-  data.psa = psaMatch ? psaMatch[1].trim() : extract("PSA");
-  data.freePsa = extract("Free/Total PSA ratio", "Free PSA");
+  // PSA can appear as "PSA (ng/mL): 2.6" OR as a block with "PSA Value: 2.6 ng/mL"
+  const psaInlineMatch = text.match(/PSA\s*\([^)]+\)[:\s]+(.+)/i);
+  const psaValueMatch = text.match(/PSA\s+Value[:\s]+(.+)/i);
+  data.psa = psaInlineMatch ? psaInlineMatch[1].trim()
+    : psaValueMatch ? psaValueMatch[1].trim()
+    : extract("PSA");
+  data.freePsa = extract("Free/Total PSA ratio", "Free/Total Ratio", "Free PSA");
   
-  const uaMatch = text.match(/Urinalysis\s*\([^)]+\)[:\s]+(.+)/i);
-  data.ua = uaMatch ? uaMatch[1].trim() : null;
+  const uaInlineMatch = text.match(/Urinalysis\s*\([^)]+\)[:\s]+(.+)/i);
+  data.ua = uaInlineMatch ? uaInlineMatch[1].trim() : null;
   if (!data.ua) {
-    const rbcVal = extract("RBC");
-    if (rbcVal) data.ua = rbcVal + " (microscopy)";
+    // Handle block-format Urinalysis with separate RBC, WBC, Method lines
+    // Use single-line extraction to avoid grabbing indented lines below
+    const extractSingle = (label) => {
+      const m = text.match(new RegExp(label + "[:\\s]+([^\\n]+)", "i"));
+      return m ? m[1].trim() : null;
+    };
+    const rbcVal = extractSingle("RBC");
+    const wbcVal = extractSingle("WBC");
+    const uaMethodVal = extractSingle("Method");
+    if (rbcVal) {
+      let uaParts = [];
+      if (wbcVal) uaParts.push("WBC: " + wbcVal);
+      uaParts.push("RBC: " + rbcVal);
+      const methodLabel = uaMethodVal ? " (" + uaMethodVal.toLowerCase() + ")" : "";
+      data.ua = uaParts.join(", ") + methodLabel;
+    }
   }
   
   data.creatinine = extract("Serum Creatinine", "Creatinine");
@@ -160,7 +178,7 @@ function parsePatientFile(text) {
   data.priorImaging = extract("Prior Imaging");
   data.proteinuria = extract("Proteinuria", "Protein(?!uria)");
   data.dipstick = extract("Dipstick Blood", "Dipstick");
-  data.uaMethod = extract("Method");
+  data.uaMethod = extract("Method", "UA Method");
 
   // ── Allergies ──
   data.allergies = extract("Allergies") || "None known";
