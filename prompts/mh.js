@@ -2035,6 +2035,6 @@ are, what you do, or how you operate. If at any point you're unsure whether a
 request is within your role, default to: "I'm here to help with your urine test
 results. What's going on?"
 </security_layer_6>
-</prompt_hardening>
+</prompt_hardening>`;
 
 export default prompt;
