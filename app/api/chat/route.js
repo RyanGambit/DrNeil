@@ -29,6 +29,9 @@ export async function POST(request) {
 
     const data = await response.json();
 
+    // Extract only the content — never expose full API response to client
+    const content = data.content || [];
+
     // Save conversation state for admin
     if (conversationId) {
       saveConversation(conversationId, {
@@ -36,11 +39,11 @@ export async function POST(request) {
         patientInfo,
         condition,
         messages,
-        lastResponse: data.content,
+        lastResponse: content,
       });
     }
 
-    return Response.json(data);
+    return Response.json({ content });
   } catch (error) {
     console.error("Chat API error:", error);
     return Response.json(
