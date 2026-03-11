@@ -296,7 +296,11 @@ export default function AskDrFleshner() {
   const [customScenarios, setCustomScenarios] = useState([]);
   const [storageReady, setStorageReady] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [voiceMode, setVoiceMode] = useState(false); // true when user initiated via mic — enables TTS responses
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const recognitionRef = useRef(null);
+  const voiceTranscriptRef = useRef(""); // tracks accumulated transcript for auto-send
+  const messagesRef = useRef([]); // always-current messages for voice auto-send
   const [conversationId] = useState(() => `consult-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -343,14 +347,18 @@ export default function AskDrFleshner() {
     })();
   }, [customScenarios, storageReady]);
 
+  // Keep messagesRef current for voice auto-send
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+
   // Auto-scroll chat
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // ── VOICE RECOGNITION ──
+  // ── VOICE RECOGNITION (tap-to-talk with auto-send) ──
   const toggleListening = () => {
     if (isListening) {
+      // User tapped mic again — stop recognition (onend will auto-send)
       recognitionRef.current?.stop();
       return;
     }
@@ -361,34 +369,51 @@ export default function AskDrFleshner() {
       return;
     }
 
+    // Stop any TTS that's playing so user can speak
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    setIsSpeaking(false);
+
     const recognition = new SpeechRecognition();
     recognition.lang = "en-US";
     recognition.interimResults = true;
     recognition.continuous = true;
     recognitionRef.current = recognition;
-
-    let finalTranscript = "";
+    voiceTranscriptRef.current = "";
 
     recognition.onresult = (event) => {
+      let finalSoFar = "";
       let interim = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
+      for (let i = 0; i < event.results.length; i++) {
         const transcript = event.results[i][0].transcript;
         if (event.results[i].isFinal) {
-          finalTranscript += transcript;
+          finalSoFar += transcript;
         } else {
           interim = transcript;
         }
       }
-      setInput(finalTranscript + interim);
+      voiceTranscriptRef.current = finalSoFar;
+      setInput(finalSoFar + interim);
     };
 
     recognition.onend = () => {
       setIsListening(false);
       recognitionRef.current = null;
+      // Auto-send if we captured speech
+      const text = voiceTranscriptRef.current.trim();
+      if (text) {
+        setVoiceMode(true); // enable TTS for the response
+        setInput("");
+        // Use ref for current messages to avoid stale closure
+        setTimeout(() => {
+          sendToAPI(messagesRef.current, text);
+        }, 50);
+      }
     };
 
     recognition.onerror = (event) => {
-      console.error("Speech recognition error:", event.error);
+      if (event.error !== "no-speech") {
+        console.error("Speech recognition error:", event.error);
+      }
       setIsListening(false);
       recognitionRef.current = null;
     };
@@ -397,10 +422,81 @@ export default function AskDrFleshner() {
     setIsListening(true);
   };
 
-  // Clean up recognition on unmount or step change
+  // ── TEXT-TO-SPEECH (speaks assistant responses when in voice mode) ──
+  const speakText = (text) => {
+    if (!window.speechSynthesis) return;
+    // Strip markdown/HTML for cleaner speech
+    const clean = text
+      .replace(/\*\*(.+?)\*\*/g, "$1")
+      .replace(/\*(.+?)\*/g, "$1")
+      .replace(/#{1,3}\s+/g, "")
+      .replace(/[·•\-]\s+/g, "")
+      .replace(/\n{2,}/g, ". ")
+      .replace(/\n/g, " ")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+    if (!clean) return;
+
+    // Cancel any ongoing speech
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(clean);
+    utterance.lang = "en-US";
+    utterance.rate = 0.92;   // slightly slower for medical content
+    utterance.pitch = 0.85;  // deeper pitch for authoritative male voice
+
+    // Try to pick a deep male voice
+    const pickVoice = () => {
+      const voices = window.speechSynthesis.getVoices();
+      // Preference order: deep male voices
+      const preferred = [
+        "Google UK English Male",
+        "Microsoft David",
+        "Daniel",           // macOS deep male
+        "Google US English",
+        "Alex",             // macOS
+      ];
+      for (const name of preferred) {
+        const match = voices.find(v => v.name.includes(name));
+        if (match) return match;
+      }
+      // Fallback: any English male voice
+      const male = voices.find(v => v.lang.startsWith("en") && v.name.toLowerCase().includes("male"));
+      if (male) return male;
+      // Last resort: any English voice
+      return voices.find(v => v.lang.startsWith("en")) || null;
+    };
+
+    const voice = pickVoice();
+    if (voice) utterance.voice = voice;
+
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+
+    window.speechSynthesis.speak(utterance);
+  };
+
+  // Stop TTS
+  const stopSpeaking = () => {
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    setIsSpeaking(false);
+  };
+
+  // Speak assistant responses when in voice mode
+  useEffect(() => {
+    if (!voiceMode || messages.length === 0) return;
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg.role === "assistant") {
+      speakText(lastMsg.text);
+    }
+  }, [messages, voiceMode]);
+
+  // Clean up recognition and speech on unmount or step change
   useEffect(() => {
     return () => {
       recognitionRef.current?.stop();
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
     };
   }, [step]);
 
@@ -1468,6 +1564,8 @@ export default function AskDrFleshner() {
     if (!input.trim() || isLoading) return;
     const userText = input.trim();
     setInput("");
+    setVoiceMode(false); // typed message = no TTS
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
     sendToAPI(messages, userText);
   };
 
@@ -1719,25 +1817,48 @@ export default function AskDrFleshner() {
                 </div>
               ) : null;
             })()}
+            {/* Voice mode indicator */}
+            {isSpeaking && (
+              <div style={{
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+                marginBottom: 8, padding: "6px 12px", borderRadius: 8,
+                background: "rgba(26, 107, 91, 0.06)", border: "1px solid #D8F0EA",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ animation: "blink 1.2s infinite", fontSize: 10, color: "#1A6B5B" }}>●</span>
+                  <span style={{ fontSize: 13, color: "#1A6B5B", fontWeight: 500 }}>Dr. Fleshner is speaking...</span>
+                </div>
+                <button
+                  onClick={stopSpeaking}
+                  style={{
+                    background: "none", border: "none", color: "#506D65",
+                    fontSize: 12, cursor: "pointer", fontWeight: 600,
+                  }}
+                >
+                  Stop
+                </button>
+              </div>
+            )}
             <div style={styles.inputRow}>
               <textarea
                 style={styles.chatInput}
                 value={input}
                 onChange={(e) => { setInput(e.target.value); }}
                 onKeyDown={handleKeyDown}
-                placeholder={isListening ? "Listening..." : "Type or tap the mic to speak..."}
+                placeholder={isListening ? "Listening — tap mic when done..." : "Type or tap the mic to speak..."}
                 rows={1}
               />
               <button
                 style={{
                   ...styles.micBtn,
-                  background: isListening ? "#DC2626" : "#F5FBF9",
-                  borderColor: isListening ? "#DC2626" : "#D8F0EA",
-                  color: isListening ? "#FFFFFF" : "#506D65",
+                  background: isListening ? "#DC2626" : voiceMode ? "rgba(26, 107, 91, 0.1)" : "#F5FBF9",
+                  borderColor: isListening ? "#DC2626" : voiceMode ? "#1A6B5B" : "#D8F0EA",
+                  color: isListening ? "#FFFFFF" : voiceMode ? "#1A6B5B" : "#506D65",
                   animation: isListening ? "micPulse 1.5s ease-in-out infinite" : "none",
                 }}
                 onClick={toggleListening}
-                title={isListening ? "Stop listening" : "Start voice input"}
+                disabled={isLoading}
+                title={isListening ? "Tap to send" : "Tap to speak"}
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <rect x="9" y="1" width="6" height="12" rx="3" />
@@ -1748,7 +1869,7 @@ export default function AskDrFleshner() {
               </button>
               <button
                 style={{ ...styles.sendBtn, opacity: input.trim() && !isLoading ? 1 : 0.4 }}
-                onClick={() => { if (isListening) recognitionRef.current?.stop(); handleSend(); }}
+                onClick={handleSend}
                 disabled={!input.trim() || isLoading}
               >
                 ↑
