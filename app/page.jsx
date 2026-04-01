@@ -251,6 +251,8 @@ function parsePatientFile(text) {
 // ═══════════════════════════════════════════════════════════════════════
 function renderMarkdown(text) {
   if (!text) return "";
+  // Escape HTML entities first to prevent XSS via AI responses
+  text = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   return text
     // Headers → bold text on its own line
     .replace(/^#{1,3}\s+(.+)$/gm, "<strong>$1</strong>")
@@ -620,6 +622,9 @@ export default function AskDrFleshner() {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
+    reader.onerror = () => {
+      console.error("Failed to read file:", reader.error);
+    };
     reader.onload = async (ev) => {
       const text = ev.target.result;
       setRawFileText(text);
@@ -674,6 +679,9 @@ export default function AskDrFleshner() {
     const file = e.target.files[0];
     if (!file) return;
     const reader = new FileReader();
+    reader.onerror = () => {
+      console.error("Failed to read scenario file:", reader.error);
+    };
     reader.onload = async (ev) => {
       const text = ev.target.result;
       const parsed = parsePatientFile(text);
@@ -694,7 +702,7 @@ export default function AskDrFleshner() {
         id: `custom-${Date.now()}`,
         condition: condition,
         label: "Custom Upload",
-        summary: `${parsed.age || "?"}${parsed.sex?.[0] || ""}, ${parsed.referralReason?.slice(0, 60) || file.name}${parsed.referralReason?.length > 60 ? "..." : ""}`,
+        summary: `${parsed.age || "?"}${parsed.sex?.[0] || ""}, ${parsed.referralReason?.slice(0, 60) || file.name}${(parsed.referralReason?.length ?? 0) > 60 ? "..." : ""}`,
         data: parsed,
         custom: true,
       };
