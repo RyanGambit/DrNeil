@@ -652,25 +652,10 @@ export default function AskDrFleshner() {
     reader.readAsText(file);
   };
 
-  // Select a pre-built scenario
-  const selectScenario = async (scenario) => {
-    const d = scenario.data;
-    setPatientData(d);
-    // Detect condition server-side
-    try {
-      const res = await fetch("/api/detect-condition", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          referralReason: d.referralReason,
-          medicalHistory: d.medicalHistory?.join(" "),
-        }),
-      });
-      const { condition } = await res.json();
-      setDetectedCondition(condition);
-    } catch {
-      setDetectedCondition(scenario.condition);
-    }
+  // Select a pre-built scenario — condition is hardcoded in scenario data
+  const selectScenario = (scenario) => {
+    setPatientData(scenario.data);
+    setDetectedCondition(scenario.condition);
     setFileUploaded(true);
   };
 
@@ -749,21 +734,8 @@ export default function AskDrFleshner() {
       data.egfr = f.egfr || ""; data.priorImaging = f.priorImaging || "";
     }
     setPatientData(data);
-    // Detect condition server-side
-    try {
-      const res = await fetch("/api/detect-condition", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          referralReason: data.referralReason,
-          medicalHistory: data.medicalHistory?.join(" "),
-        }),
-      });
-      const result = await res.json();
-      setDetectedCondition(result.condition);
-    } catch {
-      setDetectedCondition(buildCondition);
-    }
+    // Condition is hardcoded from the user's selection
+    setDetectedCondition(buildCondition);
     setFileUploaded(true);
   };
 
@@ -1241,16 +1213,39 @@ export default function AskDrFleshner() {
                     color: detectedCondition === "unknown" ? "#3D5D80" : "#1A6B5B",
                     fontFamily: "'Helvetica Neue', Arial, sans-serif",
                   }}>
-                    Detected Condition
+                    Condition
                   </span>
-                  <span style={{
-                    fontSize: 16,
-                    fontWeight: 600,
-                    color: "#1F2937",
-                    fontFamily: "'Helvetica Neue', Arial, sans-serif",
-                  }}>
-                    {CONDITION_LABELS[detectedCondition]}
-                  </span>
+                  {uploadMode !== "build" ? (
+                    <select
+                      value={detectedCondition}
+                      onChange={(e) => setDetectedCondition(e.target.value)}
+                      style={{
+                        fontSize: 14,
+                        fontWeight: 600,
+                        color: "#1F2937",
+                        fontFamily: "'Helvetica Neue', Arial, sans-serif",
+                        padding: "4px 8px",
+                        borderRadius: 6,
+                        border: "1.5px solid #D8F0EA",
+                        background: "#FFFFFF",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <option value="bph">{CONDITION_LABELS.bph}</option>
+                      <option value="ed">{CONDITION_LABELS.ed}</option>
+                      <option value="mh">{CONDITION_LABELS.mh}</option>
+                      <option value="unknown">{CONDITION_LABELS.unknown}</option>
+                    </select>
+                  ) : (
+                    <span style={{
+                      fontSize: 16,
+                      fontWeight: 600,
+                      color: "#1F2937",
+                      fontFamily: "'Helvetica Neue', Arial, sans-serif",
+                    }}>
+                      {CONDITION_LABELS[detectedCondition]}
+                    </span>
+                  )}
                 </div>
               )}
 
