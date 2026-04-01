@@ -49,6 +49,10 @@ Return this exact JSON structure, filling in what you can determine from the con
   "conversationNotes": null
 }`;
 
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return Response.json({ error: "API key not configured" }, { status: 500 });
+    }
+
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -64,6 +68,11 @@ Return this exact JSON structure, filling in what you can determine from the con
       }),
     });
 
+    if (!response.ok) {
+      console.error("Anthropic API error:", response.status, response.statusText);
+      return Response.json({ error: "AI service unavailable" }, { status: 502 });
+    }
+
     const data = await response.json();
     const text = data.content
       ?.filter((b) => b.type === "text")
@@ -71,7 +80,14 @@ Return this exact JSON structure, filling in what you can determine from the con
       .join("") || "";
 
     const clean = text.replace(/```json|```/g, "").trim();
-    const parsed = JSON.parse(clean);
+
+    let parsed;
+    try {
+      parsed = JSON.parse(clean);
+    } catch (parseErr) {
+      console.error("Analysis JSON parse error:", parseErr, "Raw text:", clean.slice(0, 200));
+      return Response.json({ error: "Analysis returned invalid data" }, { status: 502 });
+    }
 
     return Response.json(parsed);
   } catch (error) {

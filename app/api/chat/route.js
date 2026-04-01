@@ -11,6 +11,13 @@ export async function POST(request) {
     const { messages, condition, conversationId, patientInfo } = await request.json();
     const systemPrompt = PROMPTS[condition] || PROMPTS.unknown;
 
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return Response.json(
+        { error: "API key not configured" },
+        { status: 500 }
+      );
+    }
+
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -26,6 +33,14 @@ export async function POST(request) {
         messages,
       }),
     });
+
+    if (!response.ok) {
+      console.error("Anthropic API error:", response.status, response.statusText);
+      return Response.json(
+        { error: "AI service unavailable" },
+        { status: 502 }
+      );
+    }
 
     const data = await response.json();
 

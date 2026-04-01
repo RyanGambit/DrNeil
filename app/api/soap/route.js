@@ -52,6 +52,10 @@ P (Plan):
 
 Format the output with clear section headers. Be specific and clinical.`;
 
+    if (!process.env.ANTHROPIC_API_KEY) {
+      return Response.json({ error: "API key not configured" }, { status: 500 });
+    }
+
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
@@ -66,6 +70,11 @@ Format the output with clear section headers. Be specific and clinical.`;
         messages: [{ role: "user", content: soapPrompt }],
       }),
     });
+
+    if (!response.ok) {
+      console.error("Anthropic API error:", response.status, response.statusText);
+      return Response.json({ error: "AI service unavailable" }, { status: 502 });
+    }
 
     const data = await response.json();
     const noteText = data.content
