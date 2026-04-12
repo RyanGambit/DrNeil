@@ -273,65 +273,128 @@ function renderMarkdown(text) {
 // KEYWORD-MATCHED CHIP SYSTEM — No AI tags, frontend does all the work
 // ═══════════════════════════════════════════════════════════════════════
 const ED_CHIP_MAP = [
-  // Phase 1: Opening
-  { match: "chest pain during or after sex", chips: ["No, none of those", "Yes — one or more of these"] },
+  // ─── PHASE 1: OPENING ───
+  { match: "chest pain during", chips: ["No, none of those", "Yes — one or more of these"] },
+  { match: "injury to the penis", chips: ["No, none of those", "Yes — one or more of these"] },
   { match: "ready to get started", chips: ["Yes, let's go", "I have a question first"] },
-  // Phase 2: Intake (Q6-Q10)
+  { match: "ready to begin", chips: ["Yes, let's go", "I have a question first"] },
+  { match: "shall we get started", chips: ["Yes, let's go", "I have a question first"] },
+
+  // ─── PHASE 2: INTAKE (Q6-Q10) ───
   { match: "do you smoke", chips: ["Never", "I used to", "Yes, currently"] },
-  { match: "how many cigarettes a day", chips: ["A few cigarettes", "Half a pack", "About a pack", "More than a pack"] },
-  { match: "how many years did you smoke", chips: ["Under 5 years", "5–10 years", "10–20 years", "20+ years"] },
-  { match: "roughly how many years", chips: ["Under 5 years", "5–10 years", "10–20 years", "20+ years"] },
-  { match: "alcohol do you drink", chips: ["Don't drink", "A few drinks", "Moderate", "Heavy"] },
-  { match: "do you use cannabis", chips: ["No", "Occasionally", "Yes, regularly"] },
-  { match: "do you get regular exercise", chips: ["Not really", "Some, not regularly", "Yes, most days"] },
-  { match: "how active are you", chips: ["Not really", "Some, not regularly", "Yes, most days"] },
-  { match: "currently in a relationship", chips: ["Yes", "No"] },
-  // Phase 3: SHIM
-  { match: "rate your confidence that you could get and keep", chips: ["a) Very low", "b) Low", "c) Moderate", "d) High", "e) Very high"], layout: "scored" },
-  { match: "sexually active in the past 6 months", chips: ["Yes", "No"] },
-  { match: "is that because there", chips: ["No partner right now", "Avoiding it because of ED", "Interest has dropped off", "Other reason"] },
-  { match: "how often were your erections hard enough for sex", chips: ["a) Almost never", "b) Less than half the time", "c) About half the time", "d) More than half the time", "e) Almost always"], layout: "scored" },
-  { match: "able to keep your erection after you got going", chips: ["a) Almost never", "b) Less than half the time", "c) About half the time", "d) More than half the time", "e) Almost always"], layout: "scored" },
-  { match: "how hard was it to keep your erection all the way", chips: ["a) Extremely hard", "b) Very hard", "c) Hard", "d) A little hard", "e) Not hard at all"], layout: "scored" },
-  { match: "how often was it satisfying", chips: ["a) Almost never", "b) Less than half the time", "c) About half the time", "d) More than half the time", "e) Almost always"], layout: "scored" },
-  // Phase 4: Clinical History
-  { match: "morning erections", chips: ["Yes, most mornings", "Sometimes / partial", "No, not anymore"] },
-  { match: "on your own, can you get and keep", chips: ["Yes, works fine alone", "Sometimes", "No, same problem alone"] },
-  { match: "every time, or only in certain situations", chips: ["Every time, consistently", "Only in certain situations"] },
-  { match: "come on gradually over time, or", chips: ["Gradually, over time", "More suddenly"] },
-  { match: "gradually or more sudden", chips: ["Gradually, over time", "More suddenly"] },
-  { match: "getting hard in the first place, or getting hard but", chips: ["Trouble getting hard", "Get hard but lose it"] },
-  { match: "main issue getting hard or keeping", chips: ["Trouble getting hard", "Get hard but lose it"] },
-  { match: "stress, anxiety, or relationship tension", chips: ["Yes, definitely", "Not really"] },
-  { match: "pills or treatments for erections", chips: ["Yes", "No, never tried anything"] },
+  { match: "have you smoked", chips: ["Never", "I used to", "Yes, currently"] },
+  { match: "cigarettes", chips: ["A few cigarettes", "Half a pack", "About a pack", "More than a pack"] },
+  { match: "how much did you smoke", chips: ["A few cigarettes", "Half a pack", "About a pack", "More than a pack"] },
+  { match: "how many years", chips: ["Under 5 years", "5–10 years", "10–20 years", "20+ years"] },
+  { match: "how long did you smoke", chips: ["Under 5 years", "5–10 years", "10–20 years", "20+ years"] },
+  { match: "how long were you smoking", chips: ["Under 5 years", "5–10 years", "10–20 years", "20+ years"] },
+  { match: "alcohol", chips: ["Don't drink", "A few drinks", "Moderate", "Heavy"] },
+  { match: "cannabis", chips: ["No", "Occasionally", "Yes, regularly"] },
+  { match: "marijuana", chips: ["No", "Occasionally", "Yes, regularly"] },
+  { match: "regular exercise", chips: ["Not really", "Some, not regularly", "Yes, most days"] },
+  { match: "how active", chips: ["Not really", "Some, not regularly", "Yes, most days"] },
+  { match: "physically active", chips: ["Not really", "Some, not regularly", "Yes, most days"] },
+  { match: "in a relationship", chips: ["Yes", "No"] },
+  { match: "have a partner", chips: ["Yes", "No"] },
+
+  // ─── PHASE 3: SHIM ───
+  { match: "rate your confidence", chips: ["a) Very low", "b) Low", "c) Moderate", "d) High", "e) Very high"], layout: "scored" },
+  { match: "sexually active", chips: ["Yes", "No"] },
+  { match: "is that because", chips: ["No partner right now", "Avoiding it because of ED", "Interest has dropped off", "Other reason"] },
+  { match: "why is that", chips: ["No partner right now", "Avoiding it because of ED", "Interest has dropped off", "Other reason"] },
+  { match: "hard enough for sex", chips: ["a) Almost never", "b) Less than half the time", "c) About half the time", "d) More than half the time", "e) Almost always"], layout: "scored" },
+  { match: "hard enough to have sex", chips: ["a) Almost never", "b) Less than half the time", "c) About half the time", "d) More than half the time", "e) Almost always"], layout: "scored" },
+  { match: "firm enough", chips: ["a) Almost never", "b) Less than half the time", "c) About half the time", "d) More than half the time", "e) Almost always"], layout: "scored" },
+  { match: "keep your erection after", chips: ["a) Almost never", "b) Less than half the time", "c) About half the time", "d) More than half the time", "e) Almost always"], layout: "scored" },
+  { match: "maintain your erection", chips: ["a) Almost never", "b) Less than half the time", "c) About half the time", "d) More than half the time", "e) Almost always"], layout: "scored" },
+  { match: "keep it up after", chips: ["a) Almost never", "b) Less than half the time", "c) About half the time", "d) More than half the time", "e) Almost always"], layout: "scored" },
+  { match: "all the way to the end", chips: ["a) Extremely hard", "b) Very hard", "c) Hard", "d) A little hard", "e) Not hard at all"], layout: "scored" },
+  { match: "keep your erection to the end", chips: ["a) Extremely hard", "b) Very hard", "c) Hard", "d) A little hard", "e) Not hard at all"], layout: "scored" },
+  { match: "was it satisfying", chips: ["a) Almost never", "b) Less than half the time", "c) About half the time", "d) More than half the time", "e) Almost always"], layout: "scored" },
+  { match: "satisfying for you", chips: ["a) Almost never", "b) Less than half the time", "c) About half the time", "d) More than half the time", "e) Almost always"], layout: "scored" },
+
+  // ─── PHASE 4: CLINICAL HISTORY ───
+  { match: "morning erection", chips: ["Yes, most mornings", "Sometimes / partial", "No, not anymore"] },
+  { match: "wake up with", chips: ["Yes, most mornings", "Sometimes / partial", "No, not anymore"] },
+  { match: "on your own", chips: ["Yes, works fine alone", "Sometimes", "No, same problem alone"] },
+  { match: "by yourself", chips: ["Yes, works fine alone", "Sometimes", "No, same problem alone"] },
+  { match: "masturbat", chips: ["Yes, works fine alone", "Sometimes", "No, same problem alone"] },
+  { match: "happen every time", chips: ["Every time, consistently", "Only in certain situations"] },
+  { match: "certain situations", chips: ["Every time, consistently", "Only in certain situations"] },
+  { match: "gradually", chips: ["Gradually, over time", "More suddenly"] },
+  { match: "come on slow", chips: ["Gradually, over time", "More suddenly"] },
+  { match: "more sudden", chips: ["Gradually, over time", "More suddenly"] },
+  { match: "getting hard", chips: ["Trouble getting hard", "Get hard but lose it"] },
+  { match: "keeping hard", chips: ["Trouble getting hard", "Get hard but lose it"] },
+  { match: "losing it", chips: ["Trouble getting hard", "Get hard but lose it"] },
+  { match: "stress, anxiety", chips: ["Yes, definitely", "Not really"] },
+  { match: "stress or anxiety", chips: ["Yes, definitely", "Not really"] },
+  { match: "relationship tension", chips: ["Yes, definitely", "Not really"] },
+  { match: "pills or treatments", chips: ["Yes", "No, never tried anything"] },
+  { match: "tried any medication", chips: ["Yes", "No, never tried anything"] },
+  { match: "tried anything for", chips: ["Yes", "No, never tried anything"] },
   { match: "which pill", chips: ["Viagra (sildenafil)", "Cialis (tadalafil)", "Don't remember"] },
+  { match: "what was the name", chips: ["Viagra (sildenafil)", "Cialis (tadalafil)", "Don't remember"] },
+  { match: "do you remember the name", chips: ["Viagra (sildenafil)", "Cialis (tadalafil)", "Don't remember"] },
   { match: "how many times did you try", chips: ["Once or twice", "3–4 times", "5–6 times", "More than 6"] },
-  { match: "empty stomach or after a big meal", chips: ["Empty / light stomach", "After a big meal", "Don't remember"] },
+  { match: "how many times did you use", chips: ["Once or twice", "3–4 times", "5–6 times", "More than 6"] },
+  { match: "how often did you try", chips: ["Once or twice", "3–4 times", "5–6 times", "More than 6"] },
+  { match: "empty stomach", chips: ["Empty / light stomach", "After a big meal", "Don't remember"] },
+  { match: "big meal", chips: ["Empty / light stomach", "After a big meal", "Don't remember"] },
   { match: "how long before sex", chips: ["Right before", "15–30 min", "30–60 min", "1–2 hours", "Don't remember"] },
   { match: "how long did you wait", chips: ["Right before", "15–30 min", "30–60 min", "1–2 hours", "Don't remember"] },
+  { match: "how far in advance", chips: ["Right before", "15–30 min", "30–60 min", "1–2 hours", "Don't remember"] },
   { match: "were you turned on", chips: ["Yes", "No / not sure"] },
-  { match: "were you sexually stimulated", chips: ["Yes", "No / not sure"] },
-  { match: "what made you decide it wasn't working", chips: ["Didn't work at all", "Helped some, not enough", "Side effects", "Other reason"] },
-  { match: "bothers you the most", chips: ["Affecting my relationship", "Less confident", "Worried something's wrong", "Just want it fixed"] },
-  // Etiology Conflict Probes
-  { match: "do you mean over a few weeks or literally overnight", chips: ["A few weeks / months", "Literally overnight / days"] },
+  { match: "sexually stimulated", chips: ["Yes", "No / not sure"] },
+  { match: "aroused", chips: ["Yes", "No / not sure"] },
+  { match: "wasn't working", chips: ["Didn't work at all", "Helped some, not enough", "Side effects", "Other reason"] },
+  { match: "stop taking it", chips: ["Didn't work at all", "Helped some, not enough", "Side effects", "Other reason"] },
+  { match: "give up on it", chips: ["Didn't work at all", "Helped some, not enough", "Side effects", "Other reason"] },
+  { match: "bothers you", chips: ["Affecting my relationship", "Less confident", "Worried something's wrong", "Just want it fixed"] },
+  { match: "what's the hardest part", chips: ["Affecting my relationship", "Less confident", "Worried something's wrong", "Just want it fixed"] },
+
+  // ─── ETIOLOGY CONFLICT PROBES ───
+  { match: "few weeks or", chips: ["A few weeks / months", "Literally overnight / days"] },
+  { match: "literally overnight", chips: ["A few weeks / months", "Literally overnight / days"] },
+  { match: "ring true", chips: ["Yes, that rings true", "No, doesn't feel like anxiety"] },
   { match: "anxiety or pressure is getting in the way", chips: ["Yes, that rings true", "No, doesn't feel like anxiety"] },
-  { match: "completely on your own with no pressure", chips: ["Yes, fully on my own", "No, same problem"] },
-  // Conditional Follow-ups
-  { match: "interest in sex still there, or has that dropped", chips: ["Interest is still there", "Interest has dropped off"] },
-  { match: "fatigue, low energy, or mood changes", chips: ["Yes", "No"] },
-  { match: "start around the time you began a new medication", chips: ["Yes, around that time", "No, unrelated"] },
-  { match: "bend or curve in the penis", chips: ["Yes", "No"] },
-  // Partner
-  { match: "how is your partner handling", chips: ["They're supportive", "It's causing tension", "We don't talk about it", "They don't know"] },
-  // Outcome Delivery
-  { match: "which sounds better for you", chips: ["On-demand — take before sex", "Daily — small pill every day"] },
+  { match: "on your own with no pressure", chips: ["Yes, fully on my own", "No, same problem"] },
+  { match: "with zero pressure", chips: ["Yes, fully on my own", "No, same problem"] },
+
+  // ─── CONDITIONAL FOLLOW-UPS ───
+  { match: "interest in sex", chips: ["Interest is still there", "Interest has dropped off"] },
+  { match: "sex drive", chips: ["Interest is still there", "Interest has dropped off"] },
+  { match: "fatigue", chips: ["Yes", "No"] },
+  { match: "low energy", chips: ["Yes", "No"] },
+  { match: "new medication", chips: ["Yes, around that time", "No, unrelated"] },
+  { match: "started a new", chips: ["Yes, around that time", "No, unrelated"] },
+  { match: "bend or curve", chips: ["Yes", "No"] },
+  { match: "curvature", chips: ["Yes", "No"] },
+
+  // ─── PARTNER ───
+  { match: "partner handling", chips: ["They're supportive", "It's causing tension", "We don't talk about it", "They don't know"] },
+  { match: "partner dealing", chips: ["They're supportive", "It's causing tension", "We don't talk about it", "They don't know"] },
+  { match: "partner taking this", chips: ["They're supportive", "It's causing tension", "We don't talk about it", "They don't know"] },
+
+  // ─── OUTCOME DELIVERY ───
+  { match: "which sounds better", chips: ["On-demand — take before sex", "Daily — small pill every day"] },
+  { match: "two ways to take", chips: ["On-demand — take before sex", "Daily — small pill every day"] },
+  { match: "which option", chips: ["On-demand — take before sex", "Daily — small pill every day"] },
   { match: "sound good so far", chips: ["Sounds good", "I have a question"] },
+  { match: "sound good?", chips: ["Sounds good", "I have a question"] },
   { match: "any questions about that", chips: ["All good", "I have a question"] },
+  { match: "any questions so far", chips: ["All good", "I have a question"] },
+  { match: "make sense?", chips: ["Makes sense", "I have a question"] },
+  { match: "does that make sense", chips: ["Makes sense", "I have a question"] },
 ];
 
 function getChipsForMessage(messageText, condition) {
   if (condition !== "ed") return null;
+  // CRITICAL: Only match messages that contain a question mark.
+  // This prevents false matches on AI statements/explanations that
+  // happen to contain keywords (e.g. "your morning erections tell me..."
+  // or "you still need to be turned on for it to work").
+  if (!messageText.includes("?")) return null;
   const lower = messageText.toLowerCase();
   for (const entry of ED_CHIP_MAP) {
     if (lower.includes(entry.match.toLowerCase())) {
