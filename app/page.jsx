@@ -277,7 +277,7 @@ const ED_CHIP_MAP = [
   { match: "chest pain during or after sex", chips: ["No, none of those", "Yes — one or more of these"] },
   { match: "ready to get started", chips: ["Yes, let's go", "I have a question first"] },
   // Phase 2: Intake (Q6-Q10)
-  { match: "smoke, or have you ever", chips: ["Never", "I used to", "Yes, currently"] },
+  { match: "do you smoke", chips: ["Never", "I used to", "Yes, currently"] },
   { match: "how many cigarettes a day", chips: ["A few cigarettes", "Half a pack", "About a pack", "More than a pack"] },
   { match: "how many years did you smoke", chips: ["Under 5 years", "5–10 years", "10–20 years", "20+ years"] },
   { match: "roughly how many years", chips: ["Under 5 years", "5–10 years", "10–20 years", "20+ years"] },
