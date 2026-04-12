@@ -262,7 +262,8 @@ function renderMarkdown(text) {
     .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "<em>$1</em>")
     // Bullet points → clean lines
     .replace(/^[-•]\s+/gm, "  · ")
-    // Lettered options (keep as-is, they're already formatted)
+    // Action links [Schedule Follow-Up] / [Schedule In-Person Visit] → styled buttons
+    .replace(/\[Schedule ([^\]]+)\]/g, '<span style="display:inline-block;margin:6px 0;padding:8px 16px;background:#0f7b6c;color:#fff;border-radius:8px;font-size:13px;font-weight:600;">📅 Schedule $1</span>')
     // Double newlines → paragraph breaks
     .replace(/\n\n/g, "<br/><br/>")
     // Single newlines → line breaks
@@ -288,6 +289,9 @@ const ED_CHIP_MAP = [
   { match: "how many years", chips: ["Under 5 years", "5–10 years", "10–20 years", "20+ years"] },
   { match: "how long did you smoke", chips: ["Under 5 years", "5–10 years", "10–20 years", "20+ years"] },
   { match: "how long were you smoking", chips: ["Under 5 years", "5–10 years", "10–20 years", "20+ years"] },
+  { match: "how long ago did you quit", chips: ["Less than a year", "1–2 years", "3–5 years", "5–10 years", "10+ years"] },
+  { match: "when did you quit", chips: ["Less than a year", "1–2 years", "3–5 years", "5–10 years", "10+ years"] },
+  { match: "when did you stop", chips: ["Less than a year", "1–2 years", "3–5 years", "5–10 years", "10+ years"] },
   { match: "alcohol", chips: ["Don't drink", "A few drinks", "Moderate", "Heavy"] },
   { match: "cannabis", chips: ["No", "Occasionally", "Yes, regularly"] },
   { match: "marijuana", chips: ["No", "Occasionally", "Yes, regularly"] },
