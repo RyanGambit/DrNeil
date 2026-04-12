@@ -1849,7 +1849,14 @@ export default function AskDrFleshner() {
         .join("\n") || "I'm sorry, I had trouble processing that. Could you try again?";
 
       // Parse and strip component tag (ED only) before storing
-      const { cleanText: assistantText, component: assistantComponent } = parseComponentTag(assistantRaw);
+      const { cleanText: assistantText, component: parsedComponent } = parseComponentTag(assistantRaw);
+
+      // Fallback: if ED consultation and message ends with ? but AI forgot the tag,
+      // auto-assign a default yes_no component so the patient always gets buttons
+      let assistantComponent = parsedComponent;
+      if (!assistantComponent && detectedCondition === "ed" && assistantText.trimEnd().endsWith("?")) {
+        assistantComponent = { type: "yes_no", options: ["Yes", "No"] };
+      }
 
       setMessages((prev) => [
         ...prev,
