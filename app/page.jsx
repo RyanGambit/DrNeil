@@ -1743,9 +1743,16 @@ export default function AskDrFleshner() {
       // Parse and strip UI tags (ED only) before storing
       const { cleanText: assistantText, uiBlocks } = parseUITags(assistantRaw);
 
+      // Fallback: if ED consultation and message ends with ? but AI omitted tags,
+      // auto-generate a Yes/No chips block so the patient always gets tappable options
+      let finalBlocks = uiBlocks;
+      if (finalBlocks.length === 0 && detectedCondition === "ed" && assistantText.trimEnd().endsWith("?")) {
+        finalBlocks = [{ type: "chips", options: ["Yes", "No"] }];
+      }
+
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", text: assistantText, uiBlocks: uiBlocks.length > 0 ? uiBlocks : null, time: new Date() },
+        { role: "assistant", text: assistantText, uiBlocks: finalBlocks.length > 0 ? finalBlocks : null, time: new Date() },
       ]);
     } catch (err) {
       console.error("API error:", err);
