@@ -301,11 +301,14 @@ function parseUITags(text) {
     cleanText = cleanText.replace(/\[YESNO:[^\]]+\]\n?/g, "").trimEnd();
   }
 
-  // Parse [CHIPS:opt1|opt2|opt3] tag
+  // Parse [CHIPS:opt1|opt2|opt3] tag — detect SHIM scored (a-e) vs regular chips
   const chipsRegex = /\[CHIPS:([^\]]+)\]/;
   const chipsMatch = text.match(chipsRegex);
   if (chipsMatch) {
-    uiBlocks.push({ type: "chips", options: chipsMatch[1].split("|").map(o => o.trim()) });
+    const opts = chipsMatch[1].split("|").map(o => o.trim());
+    // SHIM scored choices start with "a) " — render as vertical ScoredChips
+    const isScored = opts.length === 5 && opts[0].match(/^a\)/i);
+    uiBlocks.push({ type: isScored ? "scored" : "chips", options: opts });
     cleanText = cleanText.replace(/\[CHIPS:[^\]]+\]\n?/g, "").trimEnd();
   }
 
@@ -360,18 +363,24 @@ export default function AskDrFleshner() {
   }, []);
 
   // ═══════════════════════════════════════════════════════════════════════
-  // UI PANEL SYSTEM — ED Only (3 components: CONFIRM, YESNO, CHIPS)
+  // UI PANEL SYSTEM — ED Only (from ED_Desktop_Style_Guide.jsx)
   // ═══════════════════════════════════════════════════════════════════════
 
-  const UI = {
-    accent: "#1a6b4e",
-    accentLight: "#e8f5ef",
-    white: "#ffffff",
-    border: "#e2e8f0",
-    muted: "#8892a4",
-    text: "#1a1a2e",
-    danger: "#dc2626",
-    dangerLight: "#fef2f2",
+  const T = {
+    bg: "#f7f8fa", surface: "#ffffff", text: "#1a1e2c",
+    textSecondary: "#5a6175", textMuted: "#8f95a8",
+    border: "#e4e7ee", borderLight: "#eef0f4",
+    accent: "#0f7b6c", accentSoft: "#e6f5f2", accentMid: "#c3e8e1",
+    accentHover: "#0a695c", accentText: "#0b6358",
+    chipBg: "#ffffff", chipBorder: "#d4d8e1", chipHoverBg: "#f4f6f9",
+    chipActiveBg: "#e6f5f2", chipActiveBorder: "#0f7b6c", chipActiveText: "#0b6358",
+    chipRadius: "22px",
+    panelBg: "#fafbfc", panelBorder: "#e4e7ee", panelRadius: "14px",
+    confirmCorrect: "#0f7b6c", confirmFlag: "#d97706", confirmFlagBg: "#fffbeb",
+    yesGreen: "#0f7b6c", noBorder: "#d4d8e1",
+    componentIndent: 52, bubbleMax: "82%",
+    font: "'Söhne', -apple-system, 'Segoe UI', system-ui, sans-serif",
+    fontSize: 15, fontSmall: 13, fontTiny: 11, lineHeight: 1.6,
   };
 
   const handlePanelSubmit = (messageIndex, responseText) => {
@@ -384,13 +393,14 @@ export default function AskDrFleshner() {
     }, 300);
   };
 
-  // Submitted chip — green pill with checkmark, right-aligned
+  // Submitted chip — teal pill with checkmark, right-aligned
   const SubmittedChip = ({ text }) => (
     <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
       <span style={{
-        background: UI.accent, color: "#fff", padding: "7px 14px",
-        borderRadius: 20, fontSize: 13, fontWeight: 500,
+        background: T.accent, color: "#fff", padding: "8px 16px",
+        borderRadius: T.chipRadius, fontSize: T.fontSmall, fontWeight: 500,
         display: "inline-flex", alignItems: "center", gap: 6,
+        fontFamily: T.font, maxWidth: "80%",
       }}>
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
           <path d="M3 7L6 10L11 4" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
@@ -400,155 +410,182 @@ export default function AskDrFleshner() {
     </div>
   );
 
-  // ── COMPONENT 1: ConfirmPanel (intake confirmations) ──
+  // ── COMPONENT 1: ConfirmPanel (from ED_Desktop_Style_Guide.jsx) ──
   function ConfirmPanel({ fields, messageIndex }) {
     const state = panelStates[messageIndex];
-    const [flagged, setFlagged] = useState(new Set());
+    const [responses, setResponses] = useState({});
     if (state?.submitted) return null;
 
-    const toggleFlag = (idx) => {
-      setFlagged((prev) => {
-        const next = new Set(prev);
-        if (next.has(idx)) next.delete(idx);
-        else next.add(idx);
-        return next;
-      });
-    };
+    const allAnswered = Object.keys(responses).length === fields.length;
 
     const handleSubmit = () => {
-      if (flagged.size === 0) {
+      const flagged = fields.filter((_, i) => responses[i] === "flag");
+      if (flagged.length === 0) {
         handlePanelSubmit(messageIndex, "All confirmed ✓");
       } else {
-        const flaggedLabels = fields.filter((_, i) => flagged.has(i)).map((f) => f.label);
-        handlePanelSubmit(messageIndex, "FLAGGED: " + flaggedLabels.join(", "));
+        handlePanelSubmit(messageIndex, "FLAGGED: " + flagged.map((f) => f.label).join(", "));
       }
     };
 
     return (
       <div style={{
-        background: UI.white, border: `1px solid ${UI.border}`, borderRadius: 12,
-        padding: 14, marginLeft: 40, marginBottom: 8, maxWidth: isMobile ? "90%" : "85%",
+        marginLeft: T.componentIndent, marginBottom: 4, maxWidth: T.bubbleMax,
+        background: T.panelBg, border: `1.5px solid ${T.panelBorder}`,
+        borderRadius: T.panelRadius, overflow: "hidden", fontFamily: T.font,
       }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: UI.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>
-          Tap any field that needs correcting
+        <div style={{
+          padding: "10px 18px", borderBottom: `1px solid ${T.borderLight}`,
+          display: "flex", alignItems: "center", gap: 8,
+        }}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M8 1.5A6.5 6.5 0 1014.5 8 6.5 6.5 0 008 1.5z" stroke={T.accent} strokeWidth="1.5"/>
+            <path d="M5.5 8l2 2 3.5-3.5" stroke={T.accent} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          <span style={{
+            fontSize: T.fontTiny, fontWeight: 700, color: T.accent,
+            textTransform: "uppercase", letterSpacing: "1px",
+          }}>Confirm your information</span>
         </div>
-        <div style={{ fontSize: 12, color: UI.muted, marginBottom: 12 }}>
-          If everything looks right, just hit confirm.
-        </div>
-        {fields.map((field, i) => {
-          const isWrong = flagged.has(i);
+        {fields.map((f, i) => {
+          const isFlagged = responses[i] === "flag";
+          const isConfirmed = responses[i] === "ok";
           return (
-            <div
-              key={i}
-              onClick={() => toggleFlag(i)}
-              style={{
-                display: "flex", alignItems: "center", gap: 12,
-                padding: "10px 12px", borderRadius: 8, marginBottom: 4, cursor: "pointer",
-                background: isWrong ? UI.dangerLight : UI.accentLight,
-                border: `1.5px solid ${isWrong ? UI.danger : UI.accent}`,
-                transition: "all 0.15s ease",
-              }}
-            >
-              <div style={{
-                width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
-                background: isWrong ? UI.danger : UI.accent,
-                display: "flex", alignItems: "center", justifyContent: "center",
-              }}>
-                {isWrong ? (
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <path d="M3 3L9 9M9 3L3 9" stroke="#fff" strokeWidth="2" strokeLinecap="round"/>
-                  </svg>
-                ) : (
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <path d="M2.5 6L5 8.5L9.5 3.5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                )}
+            <div key={i} style={{
+              display: "flex", alignItems: "center", padding: "12px 18px",
+              borderBottom: i < fields.length - 1 ? `1px solid ${T.borderLight}` : "none",
+              background: isFlagged ? T.confirmFlagBg : "transparent",
+            }}>
+              <div style={{ flex: 1 }}>
+                <div style={{
+                  fontSize: T.fontTiny, fontWeight: 600, color: T.textMuted,
+                  textTransform: "uppercase", letterSpacing: "0.5px",
+                }}>{f.label}</div>
+                <div style={{
+                  fontSize: T.fontSize, color: T.text, marginTop: 2,
+                }}>{f.value}</div>
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: isWrong ? UI.danger : UI.accent, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                  {field.label}{isWrong ? " — tap to undo" : ""}
-                </div>
-                <div style={{ fontSize: 14, color: UI.text, marginTop: 1 }}>
-                  {field.value}
-                </div>
+              <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                <button onClick={() => setResponses((p) => ({ ...p, [i]: "ok" }))} style={{
+                  padding: "7px 16px", borderRadius: 8, fontSize: T.fontSmall,
+                  fontWeight: 600, fontFamily: T.font, cursor: "pointer",
+                  border: `1.5px solid ${isConfirmed ? T.confirmCorrect : T.chipBorder}`,
+                  background: isConfirmed ? T.accentSoft : T.surface,
+                  color: isConfirmed ? T.confirmCorrect : T.textSecondary,
+                  transition: "all 0.15s ease",
+                }}>{isConfirmed ? "✓ Correct" : "Correct"}</button>
+                <button onClick={() => setResponses((p) => ({ ...p, [i]: "flag" }))} style={{
+                  padding: "7px 16px", borderRadius: 8, fontSize: T.fontSmall,
+                  fontWeight: 600, fontFamily: T.font, cursor: "pointer",
+                  border: `1.5px solid ${isFlagged ? T.confirmFlag : T.chipBorder}`,
+                  background: isFlagged ? T.confirmFlagBg : T.surface,
+                  color: isFlagged ? T.confirmFlag : T.textSecondary,
+                  transition: "all 0.15s ease",
+                }}>{isFlagged ? "⚑ Flagged" : "Flag"}</button>
               </div>
-              {!isWrong && (
-                <div style={{ fontSize: 11, color: UI.muted, flexShrink: 0 }}>
-                  Wrong?
-                </div>
-              )}
             </div>
           );
         })}
-        <button onClick={handleSubmit} style={{
-          width: "100%", marginTop: 10, padding: "12px 16px", borderRadius: 10,
-          background: UI.accent, color: "#fff", border: "none",
-          fontSize: 14, fontWeight: 600, cursor: "pointer",
-        }}>{flagged.size === 0 ? "All Correct — Confirm" : `Submit (${flagged.size} flagged)`}</button>
+        {allAnswered && (
+          <div style={{
+            padding: "12px 18px", borderTop: `1px solid ${T.borderLight}`,
+            display: "flex", justifyContent: "flex-end",
+          }}>
+            <button onClick={handleSubmit} style={{
+              padding: "10px 28px", borderRadius: 10, border: "none",
+              background: T.accent, color: "#fff", fontSize: T.fontSmall,
+              fontWeight: 600, fontFamily: T.font, cursor: "pointer",
+              boxShadow: "0 2px 4px rgba(15,123,108,0.2)",
+            }}>Submit</button>
+          </div>
+        )}
       </div>
     );
   }
 
-  // ── COMPONENT 2: YesNoPanel (CV screen + safety gate) ──
+  // ── COMPONENT 2: YesNoPanel (from ED_Desktop_Style_Guide.jsx) ──
   function YesNoPanel({ questions, messageIndex }) {
     const state = panelStates[messageIndex];
-    const [responses, setResponses] = useState(() =>
-      questions.reduce((acc, _, i) => ({ ...acc, [i]: null }), {})
-    );
+    const [answers, setAnswers] = useState({});
     if (state?.submitted) return null;
 
-    const allAnswered = Object.values(responses).every((v) => v !== null);
+    const allAnswered = Object.keys(answers).length === questions.length;
 
     const handleSubmit = () => {
       if (!allAnswered) return;
       const lines = questions.map((q, i) =>
-        `${q.question} → ${responses[i] === "yes" ? "Yes" : "No"}`
+        `${q.question} → ${answers[i] === "yes" ? "Yes" : "No"}`
       );
       handlePanelSubmit(messageIndex, lines.join(" | "));
     };
 
     return (
       <div style={{
-        background: UI.white, border: `1px solid ${UI.border}`, borderRadius: 12,
-        padding: 14, marginLeft: 40, marginBottom: 8, maxWidth: isMobile ? "90%" : "85%",
+        marginLeft: T.componentIndent, marginBottom: 4, maxWidth: T.bubbleMax,
+        background: T.panelBg, border: `1.5px solid ${T.panelBorder}`,
+        borderRadius: T.panelRadius, overflow: "hidden", fontFamily: T.font,
       }}>
+        <div style={{
+          padding: "10px 18px", borderBottom: `1px solid ${T.borderLight}`,
+          display: "flex", alignItems: "center", gap: 8,
+        }}>
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <rect x="1.5" y="1.5" width="13" height="13" rx="3" stroke={T.accent} strokeWidth="1.5"/>
+            <path d="M5 8h6M8 5v6" stroke={T.accent} strokeWidth="1.5" strokeLinecap="round"/>
+          </svg>
+          <span style={{
+            fontSize: T.fontTiny, fontWeight: 700, color: T.accent,
+            textTransform: "uppercase", letterSpacing: "1px",
+          }}>Safety checks</span>
+        </div>
         {questions.map((q, i) => (
           <div key={i} style={{
-            padding: "12px 0", borderBottom: i < questions.length - 1 ? `1px solid ${UI.border}` : "none",
+            display: "flex", alignItems: "flex-start", padding: "14px 18px",
+            borderBottom: i < questions.length - 1 ? `1px solid ${T.borderLight}` : "none",
+            gap: 16,
           }}>
-            <div style={{ fontSize: 14, color: UI.text, lineHeight: 1.5, marginBottom: 8 }}>
-              {q.question}
-            </div>
-            <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={() => setResponses((p) => ({ ...p, [i]: "yes" }))} style={{
-                flex: 1, padding: "10px 8px", borderRadius: 10, fontSize: 13, fontWeight: 600,
-                border: `1.5px solid ${responses[i] === "yes" ? UI.accent : UI.border}`,
-                background: responses[i] === "yes" ? UI.accentLight : UI.white,
-                color: responses[i] === "yes" ? UI.accent : UI.muted,
-                cursor: "pointer", minHeight: 44,
+            <div style={{
+              flex: 1, fontSize: T.fontSize, color: T.text,
+              lineHeight: T.lineHeight,
+            }}>{q.question}</div>
+            <div style={{ display: "flex", gap: 6, flexShrink: 0, marginTop: 2 }}>
+              <button onClick={() => setAnswers((p) => ({ ...p, [i]: "yes" }))} style={{
+                padding: "7px 18px", borderRadius: 8, fontSize: T.fontSmall,
+                fontWeight: 600, fontFamily: T.font, cursor: "pointer",
+                border: `1.5px solid ${answers[i] === "yes" ? T.yesGreen : T.noBorder}`,
+                background: answers[i] === "yes" ? T.accentSoft : T.surface,
+                color: answers[i] === "yes" ? T.yesGreen : T.textSecondary,
+                transition: "all 0.15s ease",
               }}>Yes</button>
-              <button onClick={() => setResponses((p) => ({ ...p, [i]: "no" }))} style={{
-                flex: 1, padding: "10px 8px", borderRadius: 10, fontSize: 13, fontWeight: 600,
-                border: `1.5px solid ${responses[i] === "no" ? UI.danger : UI.border}`,
-                background: responses[i] === "no" ? UI.dangerLight : UI.white,
-                color: responses[i] === "no" ? UI.danger : UI.muted,
-                cursor: "pointer", minHeight: 44,
+              <button onClick={() => setAnswers((p) => ({ ...p, [i]: "no" }))} style={{
+                padding: "7px 18px", borderRadius: 8, fontSize: T.fontSmall,
+                fontWeight: 600, fontFamily: T.font, cursor: "pointer",
+                border: `1.5px solid ${answers[i] === "no" ? "#c53030" : T.noBorder}`,
+                background: answers[i] === "no" ? "#fff5f5" : T.surface,
+                color: answers[i] === "no" ? "#c53030" : T.textSecondary,
+                transition: "all 0.15s ease",
               }}>No</button>
             </div>
           </div>
         ))}
-        <button onClick={handleSubmit} disabled={!allAnswered} style={{
-          width: "100%", marginTop: 10, padding: "12px 16px", borderRadius: 10,
-          background: allAnswered ? UI.accent : UI.border, color: allAnswered ? "#fff" : UI.muted,
-          border: "none", fontSize: 14, fontWeight: 600,
-          cursor: allAnswered ? "pointer" : "default",
-        }}>Submit</button>
+        {allAnswered && (
+          <div style={{
+            padding: "12px 18px", borderTop: `1px solid ${T.borderLight}`,
+            display: "flex", justifyContent: "flex-end",
+          }}>
+            <button onClick={handleSubmit} style={{
+              padding: "10px 28px", borderRadius: 10, border: "none",
+              background: T.accent, color: "#fff", fontSize: T.fontSmall,
+              fontWeight: 600, fontFamily: T.font, cursor: "pointer",
+              boxShadow: "0 2px 4px rgba(15,123,108,0.2)",
+            }}>Submit</button>
+          </div>
+        )}
       </div>
     );
   }
 
-  // ── COMPONENT 3: ChipsInput (suggestion chips + text field) ──
-  function ChipsInput({ options, messageIndex }) {
+  // ── COMPONENT 3: ChipsWithTextField (from ED_Desktop_Style_Guide.jsx) ──
+  function ChipsWithTextField({ options, messageIndex }) {
     const state = panelStates[messageIndex];
     const [textValue, setTextValue] = useState("");
     if (state?.submitted) return null;
@@ -563,21 +600,25 @@ export default function AskDrFleshner() {
     };
 
     return (
-      <div style={{ marginLeft: 40, marginBottom: 8, maxWidth: isMobile ? "90%" : "85%" }}>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+      <div style={{
+        marginLeft: T.componentIndent, marginBottom: 4, maxWidth: T.bubbleMax, fontFamily: T.font,
+      }}>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
           {options.map((chip, i) => (
             <button key={i} onClick={() => handleChipTap(chip)} style={{
-              padding: "9px 16px", borderRadius: 20, fontSize: 13, fontWeight: 500,
-              border: `1.5px solid ${UI.border}`, background: UI.white, color: UI.text,
-              cursor: "pointer", minHeight: 38,
-              transition: "border-color 0.15s, background 0.15s",
+              padding: "10px 20px", borderRadius: T.chipRadius,
+              border: `1.5px solid ${T.chipBorder}`, background: T.chipBg,
+              color: T.text, fontSize: T.fontSize, fontWeight: 450,
+              fontFamily: T.font, cursor: "pointer", lineHeight: 1.3,
+              boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+              transition: "all 0.15s ease",
             }}
-            onMouseEnter={(e) => { e.target.style.borderColor = UI.accent; e.target.style.background = UI.accentLight; }}
-            onMouseLeave={(e) => { e.target.style.borderColor = UI.border; e.target.style.background = UI.white; }}
+            onMouseEnter={(e) => { e.target.style.borderColor = T.chipActiveBorder; e.target.style.background = T.chipActiveBg; e.target.style.color = T.chipActiveText; }}
+            onMouseLeave={(e) => { e.target.style.borderColor = T.chipBorder; e.target.style.background = T.chipBg; e.target.style.color = T.text; }}
             >{chip}</button>
           ))}
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <input
             type="text"
             value={textValue}
@@ -585,16 +626,87 @@ export default function AskDrFleshner() {
             onKeyDown={(e) => { if (e.key === "Enter") handleTextSend(); }}
             placeholder="Or type your answer..."
             style={{
-              flex: 1, padding: "10px 14px", borderRadius: 10,
-              border: `1px solid ${UI.border}`, fontSize: 14,
-              fontFamily: "inherit", color: UI.text, outline: "none",
+              flex: 1, padding: "10px 16px", borderRadius: 12,
+              border: `1.5px solid ${T.border}`, fontSize: T.fontSmall,
+              fontFamily: T.font, color: T.text, background: T.surface,
+              outline: "none",
             }}
           />
           <button onClick={handleTextSend} style={{
-            padding: "10px 18px", borderRadius: 10,
-            background: textValue.trim() ? UI.accent : UI.border,
-            color: textValue.trim() ? "#fff" : UI.muted,
-            border: "none", fontSize: 14, fontWeight: 600,
+            padding: "10px 18px", borderRadius: 12, border: "none",
+            background: textValue.trim() ? T.accent : T.border,
+            color: textValue.trim() ? "#fff" : T.textMuted,
+            fontSize: T.fontSmall, fontWeight: 600, fontFamily: T.font,
+            cursor: textValue.trim() ? "pointer" : "default",
+          }}>Send</button>
+        </div>
+      </div>
+    );
+  }
+
+  // ── COMPONENT 4: ScoredChips — SHIM a-e vertical cards (from ED_Desktop_Style_Guide.jsx) ──
+  function ScoredChips({ options, messageIndex }) {
+    const state = panelStates[messageIndex];
+    const [textValue, setTextValue] = useState("");
+    if (state?.submitted) return null;
+
+    const handleSelect = (opt, i) => {
+      const cleanLabel = opt.replace(/^[a-e]\)\s*/i, "");
+      handlePanelSubmit(messageIndex, cleanLabel);
+    };
+
+    const handleTextSend = () => {
+      if (!textValue.trim()) return;
+      handlePanelSubmit(messageIndex, textValue.trim());
+    };
+
+    return (
+      <div style={{
+        marginLeft: T.componentIndent, marginBottom: 4, maxWidth: T.bubbleMax, fontFamily: T.font,
+      }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {options.map((opt, i) => {
+            const letter = String.fromCharCode(97 + i);
+            const cleanLabel = opt.replace(/^[a-e]\)\s*/i, "");
+            return (
+              <button key={i} onClick={() => handleSelect(opt, i)} style={{
+                display: "flex", alignItems: "center", gap: 12,
+                padding: "11px 16px", borderRadius: 12,
+                border: `1.5px solid ${T.chipBorder}`, background: T.chipBg,
+                color: T.text, fontSize: T.fontSize, fontWeight: 400,
+                fontFamily: T.font, cursor: "pointer", textAlign: "left",
+                boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+                transition: "all 0.15s ease",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = T.chipActiveBorder; e.currentTarget.style.background = T.chipActiveBg; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = T.chipBorder; e.currentTarget.style.background = T.chipBg; }}
+              >
+                <span style={{
+                  width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 13, fontWeight: 700,
+                  background: "#f0f2f5", color: T.textMuted,
+                  transition: "all 0.15s ease",
+                }}>{letter}</span>
+                {cleanLabel}
+              </button>
+            );
+          })}
+        </div>
+        <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10 }}>
+          <input type="text" value={textValue} onChange={(e) => setTextValue(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleTextSend(); }}
+            placeholder="Or type your answer..."
+            style={{
+              flex: 1, padding: "10px 16px", borderRadius: 12,
+              border: `1.5px solid ${T.border}`, fontSize: T.fontSmall,
+              fontFamily: T.font, color: T.text, background: T.surface, outline: "none",
+            }} />
+          <button onClick={handleTextSend} style={{
+            padding: "10px 18px", borderRadius: 12, border: "none",
+            background: textValue.trim() ? T.accent : T.border,
+            color: textValue.trim() ? "#fff" : T.textMuted,
+            fontSize: T.fontSmall, fontWeight: 600, fontFamily: T.font,
             cursor: textValue.trim() ? "pointer" : "default",
           }}>Send</button>
         </div>
@@ -610,8 +722,10 @@ export default function AskDrFleshner() {
           return <ConfirmPanel key={bi} fields={block.fields} messageIndex={messageIndex} />;
         case "yesno":
           return <YesNoPanel key={bi} questions={block.questions} messageIndex={messageIndex} />;
+        case "scored":
+          return <ScoredChips key={bi} options={block.options} messageIndex={messageIndex} />;
         case "chips":
-          return <ChipsInput key={bi} options={block.options} messageIndex={messageIndex} />;
+          return <ChipsWithTextField key={bi} options={block.options} messageIndex={messageIndex} />;
         default:
           return null;
       }
