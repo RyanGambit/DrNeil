@@ -530,22 +530,10 @@ export default function AskDrFleshner() {
     }, 300);
   };
 
-  // Submitted chip — teal pill with checkmark, right-aligned
-  const SubmittedChip = ({ text }) => (
-    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
-      <span style={{
-        background: T.accent, color: "#fff", padding: "8px 16px",
-        borderRadius: T.chipRadius, fontSize: T.fontSmall, fontWeight: 500,
-        display: "inline-flex", alignItems: "center", gap: 6,
-        fontFamily: T.font, maxWidth: "80%",
-      }}>
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-          <path d="M3 7L6 10L11 4" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-        </svg>
-        {text}
-      </span>
-    </div>
-  );
+  // Rule 5: Patient answer = full chat bubble (not a tiny pill)
+  // After tapping, the response card disappears and the patient's answer
+  // shows as a normal patient bubble on the right. Handled by NOT skipping
+  // isComponentSubmission messages in the render loop.
 
   // ── COMPONENT 1: ConfirmPanel (from ED_Desktop_Style_Guide.jsx) ──
   function ConfirmPanel({ fields, messageIndex }) {
@@ -721,74 +709,16 @@ export default function AskDrFleshner() {
     );
   }
 
-  // ── COMPONENT 3: ChipsWithTextField (from ED_Desktop_Style_Guide.jsx) ──
-  function ChipsWithTextField({ options, messageIndex }) {
+  // ── RESPONSE CARD: Single contained component for ALL question types ──
+  // Rules: bordered card, 48px indent, 78% max-width, "or type" divider,
+  // disappears after answering. Same container for chips, scored, everything.
+  function ResponseCard({ chips, scored, messageIndex, placeholder = "Or type your answer..." }) {
     const state = panelStates[messageIndex];
     const [textValue, setTextValue] = useState("");
     if (state?.submitted) return null;
 
     const handleChipTap = (chip) => {
-      handlePanelSubmit(messageIndex, chip);
-    };
-
-    const handleTextSend = () => {
-      if (!textValue.trim()) return;
-      handlePanelSubmit(messageIndex, textValue.trim());
-    };
-
-    return (
-      <div style={{
-        marginLeft: T.componentIndent, marginBottom: 4, maxWidth: T.bubbleMax, fontFamily: T.font,
-      }}>
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
-          {options.map((chip, i) => (
-            <button key={i} onClick={() => handleChipTap(chip)} style={{
-              padding: "10px 20px", borderRadius: T.chipRadius,
-              border: `1.5px solid ${T.chipBorder}`, background: T.chipBg,
-              color: T.text, fontSize: T.fontSize, fontWeight: 450,
-              fontFamily: T.font, cursor: "pointer", lineHeight: 1.3,
-              boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
-              transition: "all 0.15s ease",
-            }}
-            onMouseEnter={(e) => { e.target.style.borderColor = T.chipActiveBorder; e.target.style.background = T.chipActiveBg; e.target.style.color = T.chipActiveText; }}
-            onMouseLeave={(e) => { e.target.style.borderColor = T.chipBorder; e.target.style.background = T.chipBg; e.target.style.color = T.text; }}
-            >{chip}</button>
-          ))}
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <input
-            type="text"
-            value={textValue}
-            onChange={(e) => setTextValue(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") handleTextSend(); }}
-            placeholder="Or type your answer..."
-            style={{
-              flex: 1, padding: "10px 16px", borderRadius: 12,
-              border: `1.5px solid ${T.border}`, fontSize: T.fontSmall,
-              fontFamily: T.font, color: T.text, background: T.surface,
-              outline: "none",
-            }}
-          />
-          <button onClick={handleTextSend} style={{
-            padding: "10px 18px", borderRadius: 12, border: "none",
-            background: textValue.trim() ? T.accent : T.border,
-            color: textValue.trim() ? "#fff" : T.textMuted,
-            fontSize: T.fontSmall, fontWeight: 600, fontFamily: T.font,
-            cursor: textValue.trim() ? "pointer" : "default",
-          }}>Send</button>
-        </div>
-      </div>
-    );
-  }
-
-  // ── COMPONENT 4: ScoredChips — SHIM a-e vertical cards (from ED_Desktop_Style_Guide.jsx) ──
-  function ScoredChips({ options, messageIndex }) {
-    const state = panelStates[messageIndex];
-    const [textValue, setTextValue] = useState("");
-    if (state?.submitted) return null;
-
-    const handleSelect = (opt, i) => {
-      const cleanLabel = opt.replace(/^[a-e]\)\s*/i, "");
+      const cleanLabel = chip.replace(/^[a-e]\)\s*/i, "");
       handlePanelSubmit(messageIndex, cleanLabel);
     };
 
@@ -799,51 +729,81 @@ export default function AskDrFleshner() {
 
     return (
       <div style={{
-        marginLeft: T.componentIndent, marginBottom: 4, maxWidth: T.bubbleMax, fontFamily: T.font,
+        marginLeft: 48, maxWidth: "78%", marginBottom: 6,
+        background: T.surface, border: `1.5px solid ${T.border}`,
+        borderRadius: 16, padding: scored ? "12px 14px" : "14px 16px",
+        boxShadow: "0 1px 4px rgba(0,0,0,0.04)", fontFamily: T.font,
       }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          {options.map((opt, i) => {
-            const letter = String.fromCharCode(97 + i);
-            const cleanLabel = opt.replace(/^[a-e]\)\s*/i, "");
-            return (
-              <button key={i} onClick={() => handleSelect(opt, i)} style={{
-                display: "flex", alignItems: "center", gap: 12,
-                padding: "11px 16px", borderRadius: 12,
-                border: `1.5px solid ${T.chipBorder}`, background: T.chipBg,
-                color: T.text, fontSize: T.fontSize, fontWeight: 400,
-                fontFamily: T.font, cursor: "pointer", textAlign: "left",
-                boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
-                transition: "all 0.15s ease",
+        {/* Chips — horizontal or scored vertical */}
+        {chips && !scored && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+            {chips.map((chip, i) => (
+              <button key={i} onClick={() => handleChipTap(chip)} style={{
+                padding: "10px 22px", borderRadius: 22,
+                border: `1.5px solid ${T.chipBorder}`, background: "#fff",
+                color: T.text, fontSize: 14, fontWeight: 500, fontFamily: T.font,
+                cursor: "pointer", boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+                lineHeight: 1.3, transition: "all 0.15s ease",
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = T.chipActiveBorder; e.currentTarget.style.background = T.chipActiveBg; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = T.chipBorder; e.currentTarget.style.background = T.chipBg; }}
-              >
-                <span style={{
-                  width: 28, height: 28, borderRadius: 8, flexShrink: 0,
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 13, fontWeight: 700,
-                  background: "#f0f2f5", color: T.textMuted,
-                  transition: "all 0.15s ease",
-                }}>{letter}</span>
-                {cleanLabel}
-              </button>
-            );
-          })}
-        </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 10 }}>
+              onMouseEnter={(e) => { e.target.style.borderColor = T.accent; e.target.style.background = T.accentSoft; }}
+              onMouseLeave={(e) => { e.target.style.borderColor = T.chipBorder; e.target.style.background = "#fff"; }}
+              >{chip}</button>
+            ))}
+          </div>
+        )}
+        {chips && scored && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+            {chips.map((chip, i) => {
+              const letter = String.fromCharCode(97 + i);
+              const cleanLabel = chip.replace(/^[a-e]\)\s*/i, "");
+              return (
+                <button key={i} onClick={() => handleChipTap(chip)} style={{
+                  display: "flex", alignItems: "center", gap: 12,
+                  padding: "10px 14px", borderRadius: 12,
+                  border: `1.5px solid ${T.chipBorder}`, background: "#fff",
+                  color: T.text, fontSize: 14, fontWeight: 450, fontFamily: T.font,
+                  cursor: "pointer", textAlign: "left",
+                  boxShadow: "0 1px 2px rgba(0,0,0,0.04)", transition: "all 0.15s ease",
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = T.accent; e.currentTarget.style.background = T.accentSoft; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = T.chipBorder; e.currentTarget.style.background = "#fff"; }}
+                >
+                  <span style={{
+                    width: 26, height: 26, borderRadius: 7, flexShrink: 0,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 12, fontWeight: 700, background: "#f0f2f5", color: T.textMuted,
+                  }}>{letter}</span>
+                  {cleanLabel}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {/* "or type" divider */}
+        {chips && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+            <div style={{ flex: 1, height: 1, background: T.borderLight }} />
+            <span style={{
+              fontSize: 11, color: T.textMuted, textTransform: "uppercase",
+              letterSpacing: "0.5px", fontFamily: T.font,
+            }}>or type</span>
+            <div style={{ flex: 1, height: 1, background: T.borderLight }} />
+          </div>
+        )}
+        {/* Text field + Send */}
+        <div style={{ display: "flex", gap: 8 }}>
           <input type="text" value={textValue} onChange={(e) => setTextValue(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") handleTextSend(); }}
-            placeholder="Or type your answer..."
-            style={{
-              flex: 1, padding: "10px 16px", borderRadius: 12,
-              border: `1.5px solid ${T.border}`, fontSize: T.fontSmall,
-              fontFamily: T.font, color: T.text, background: T.surface, outline: "none",
+            placeholder={placeholder} style={{
+              flex: 1, padding: "10px 14px", borderRadius: 10,
+              border: `1.5px solid ${T.border}`, fontSize: 14,
+              fontFamily: T.font, color: T.text, background: "#fafbfc", outline: "none",
             }} />
           <button onClick={handleTextSend} style={{
-            padding: "10px 18px", borderRadius: 12, border: "none",
+            padding: "10px 20px", borderRadius: 10, border: "none",
             background: textValue.trim() ? T.accent : T.border,
             color: textValue.trim() ? "#fff" : T.textMuted,
-            fontSize: T.fontSmall, fontWeight: 600, fontFamily: T.font,
+            fontSize: 13, fontWeight: 600, fontFamily: T.font,
             cursor: textValue.trim() ? "pointer" : "default",
           }}>Send</button>
         </div>
@@ -2204,7 +2164,7 @@ export default function AskDrFleshner() {
             )}
             {displayMessages.map((msg, i) => {
               // Skip panel-submitted messages — shown as SubmittedChip instead
-              if (msg.role === "user" && msg.isComponentSubmission) return null;
+              // Rule 5: Patient answers show as full chat bubbles — don't skip them
 
               return (
                 <div key={i}>
@@ -2220,20 +2180,13 @@ export default function AskDrFleshner() {
                     if (!stackedType && !chipResult) return null;
                     return (
                       <>
-                        {!panelStates[i]?.submitted && (
-                          stackedType === "confirm" ? (
-                            <ConfirmPanel fields={parseConfirmFields(msg.text)} messageIndex={i} />
-                          ) : stackedType === "yesno" ? (
-                            <YesNoPanel questions={parseYesNoQuestions(msg.text)} messageIndex={i} />
-                          ) : chipResult?.layout === "scored" ? (
-                            <ScoredChips options={chipResult.chips} messageIndex={i} />
-                          ) : chipResult ? (
-                            <ChipsWithTextField options={chipResult.chips} messageIndex={i} />
-                          ) : null
-                        )}
-                        {panelStates[i]?.submitted && (
-                          <SubmittedChip text={panelStates[i].response} />
-                        )}
+                        {stackedType === "confirm" ? (
+                          <ConfirmPanel fields={parseConfirmFields(msg.text)} messageIndex={i} />
+                        ) : stackedType === "yesno" ? (
+                          <YesNoPanel questions={parseYesNoQuestions(msg.text)} messageIndex={i} />
+                        ) : chipResult ? (
+                          <ResponseCard chips={chipResult.chips} scored={chipResult.layout === "scored"} messageIndex={i} />
+                        ) : null}
                       </>
                     );
                   })()}
