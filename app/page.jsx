@@ -584,8 +584,17 @@ export default function AskDrFleshner() {
   // ── COMPONENT 1: ConfirmPanel (from ED_Desktop_Style_Guide.jsx) ──
   function ConfirmPanel({ fields, messageIndex }) {
     const state = panelStates[messageIndex];
-    const [responses, setResponses] = useState({});
     if (state?.submitted) return null;
+
+    // Store responses in panelStates (persists across re-renders)
+    // instead of local useState (resets when component remounts)
+    const responses = state?.responses || {};
+    const setResponse = (idx, value) => {
+      setPanelStates((prev) => ({
+        ...prev,
+        [messageIndex]: { ...prev[messageIndex], responses: { ...(prev[messageIndex]?.responses || {}), [idx]: value } },
+      }));
+    };
 
     const allAnswered = Object.keys(responses).length === fields.length;
 
@@ -636,7 +645,7 @@ export default function AskDrFleshner() {
                 }}>{f.value}</div>
               </div>
               <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                <button onClick={() => setResponses((p) => ({ ...p, [i]: "ok" }))} style={{
+                <button onClick={() => setResponse(i, "ok")} style={{
                   padding: "7px 16px", borderRadius: 8, fontSize: T.fontSmall,
                   fontWeight: 600, fontFamily: T.font, cursor: "pointer",
                   border: `1.5px solid ${isConfirmed ? T.confirmCorrect : T.chipBorder}`,
@@ -644,7 +653,7 @@ export default function AskDrFleshner() {
                   color: isConfirmed ? T.confirmCorrect : T.textSecondary,
                   transition: "all 0.15s ease",
                 }}>{isConfirmed ? "✓ Correct" : "Correct"}</button>
-                <button onClick={() => setResponses((p) => ({ ...p, [i]: "flag" }))} style={{
+                <button onClick={() => setResponse(i, "flag")} style={{
                   padding: "7px 16px", borderRadius: 8, fontSize: T.fontSmall,
                   fontWeight: 600, fontFamily: T.font, cursor: "pointer",
                   border: `1.5px solid ${isFlagged ? T.confirmFlag : T.chipBorder}`,
@@ -676,8 +685,16 @@ export default function AskDrFleshner() {
   // ── COMPONENT 2: YesNoPanel (from ED_Desktop_Style_Guide.jsx) ──
   function YesNoPanel({ questions, messageIndex }) {
     const state = panelStates[messageIndex];
-    const [answers, setAnswers] = useState({});
     if (state?.submitted) return null;
+
+    // Store answers in panelStates (persists across re-renders)
+    const answers = state?.answers || {};
+    const setAnswer = (idx, value) => {
+      setPanelStates((prev) => ({
+        ...prev,
+        [messageIndex]: { ...prev[messageIndex], answers: { ...(prev[messageIndex]?.answers || {}), [idx]: value } },
+      }));
+    };
 
     const allAnswered = Object.keys(answers).length === questions.length;
 
@@ -719,7 +736,7 @@ export default function AskDrFleshner() {
               lineHeight: T.lineHeight,
             }}>{q}</div>
             <div style={{ display: "flex", gap: 6, flexShrink: 0, marginTop: 2 }}>
-              <button onClick={() => setAnswers((p) => ({ ...p, [i]: "yes" }))} style={{
+              <button onClick={() => setAnswer(i, "yes")} style={{
                 padding: "7px 18px", borderRadius: 8, fontSize: T.fontSmall,
                 fontWeight: 600, fontFamily: T.font, cursor: "pointer",
                 border: `1.5px solid ${answers[i] === "yes" ? T.yesGreen : T.noBorder}`,
@@ -727,7 +744,7 @@ export default function AskDrFleshner() {
                 color: answers[i] === "yes" ? T.yesGreen : T.textSecondary,
                 transition: "all 0.15s ease",
               }}>Yes</button>
-              <button onClick={() => setAnswers((p) => ({ ...p, [i]: "no" }))} style={{
+              <button onClick={() => setAnswer(i, "no")} style={{
                 padding: "7px 18px", borderRadius: 8, fontSize: T.fontSmall,
                 fontWeight: 600, fontFamily: T.font, cursor: "pointer",
                 border: `1.5px solid ${answers[i] === "no" ? "#c53030" : T.noBorder}`,
