@@ -403,26 +403,25 @@ export default function AskDrFleshner() {
   // ── COMPONENT 1: ConfirmPanel (intake confirmations) ──
   function ConfirmPanel({ fields, messageIndex }) {
     const state = panelStates[messageIndex];
-    const [responses, setResponses] = useState(() =>
-      fields.reduce((acc, f, i) => ({ ...acc, [i]: "correct" }), {})
-    );
+    const [flagged, setFlagged] = useState(new Set());
     if (state?.submitted) return null;
 
-    const toggle = (idx) => {
-      setResponses((prev) => ({
-        ...prev,
-        [idx]: prev[idx] === "correct" ? "flagged" : "correct",
-      }));
+    const toggleFlag = (idx) => {
+      setFlagged((prev) => {
+        const next = new Set(prev);
+        if (next.has(idx)) next.delete(idx);
+        else next.add(idx);
+        return next;
+      });
     };
 
     const handleSubmit = () => {
-      const flagged = fields.filter((_, i) => responses[i] === "flagged");
-      const confirmed = fields.filter((_, i) => responses[i] === "correct");
-      let text = confirmed.map((f) => `${f.label}: ${f.value} ✓`).join(", ");
-      if (flagged.length > 0) {
-        text += (text ? ". " : "") + "FLAGGED: " + flagged.map((f) => f.label).join(", ");
+      if (flagged.size === 0) {
+        handlePanelSubmit(messageIndex, "All confirmed ✓");
+      } else {
+        const flaggedLabels = fields.filter((_, i) => flagged.has(i)).map((f) => f.label);
+        handlePanelSubmit(messageIndex, "FLAGGED: " + flaggedLabels.join(", "));
       }
-      handlePanelSubmit(messageIndex, text);
     };
 
     return (
@@ -430,42 +429,54 @@ export default function AskDrFleshner() {
         background: UI.white, border: `1px solid ${UI.border}`, borderRadius: 12,
         padding: 14, marginLeft: 40, marginBottom: 8, maxWidth: isMobile ? "90%" : "85%",
       }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: UI.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>
-          Confirm your details
+        <div style={{ fontSize: 10, fontWeight: 700, color: UI.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 4 }}>
+          Tap any field that needs correcting
+        </div>
+        <div style={{ fontSize: 12, color: UI.muted, marginBottom: 12 }}>
+          If everything looks right, just hit confirm.
         </div>
         {fields.map((field, i) => {
-          const isFlagged = responses[i] === "flagged";
+          const isWrong = flagged.has(i);
           return (
-            <div key={i} style={{
-              display: "flex", alignItems: "center", justifyContent: "space-between",
-              padding: "10px 12px", borderRadius: 8, marginBottom: 4,
-              background: isFlagged ? UI.dangerLight : "transparent",
-              border: `1px solid ${isFlagged ? UI.danger : "transparent"}`,
-            }}>
+            <div
+              key={i}
+              onClick={() => toggleFlag(i)}
+              style={{
+                display: "flex", alignItems: "center", gap: 12,
+                padding: "10px 12px", borderRadius: 8, marginBottom: 4, cursor: "pointer",
+                background: isWrong ? UI.dangerLight : UI.accentLight,
+                border: `1.5px solid ${isWrong ? UI.danger : UI.accent}`,
+                transition: "all 0.15s ease",
+              }}
+            >
+              <div style={{
+                width: 22, height: 22, borderRadius: "50%", flexShrink: 0,
+                background: isWrong ? UI.danger : UI.accent,
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                {isWrong ? (
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <path d="M3 3L9 9M9 3L3 9" stroke="#fff" strokeWidth="2" strokeLinecap="round"/>
+                  </svg>
+                ) : (
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <path d="M2.5 6L5 8.5L9.5 3.5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                )}
+              </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 11, fontWeight: 600, color: UI.muted, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                  {field.label}
+                <div style={{ fontSize: 11, fontWeight: 600, color: isWrong ? UI.danger : UI.accent, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                  {field.label}{isWrong ? " — tap to undo" : ""}
                 </div>
-                <div style={{ fontSize: 14, color: UI.text, marginTop: 2 }}>
+                <div style={{ fontSize: 14, color: UI.text, marginTop: 1 }}>
                   {field.value}
                 </div>
               </div>
-              <div style={{ display: "flex", gap: 6, flexShrink: 0, marginLeft: 12 }}>
-                <button onClick={() => !isFlagged && toggle(i)} style={{
-                  padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600,
-                  border: `1.5px solid ${!isFlagged ? UI.accent : UI.border}`,
-                  background: !isFlagged ? UI.accentLight : UI.white,
-                  color: !isFlagged ? UI.accent : UI.muted,
-                  cursor: "pointer", minHeight: 32,
-                }}>Correct</button>
-                <button onClick={() => isFlagged || toggle(i)} style={{
-                  padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600,
-                  border: `1.5px solid ${isFlagged ? UI.danger : UI.border}`,
-                  background: isFlagged ? UI.dangerLight : UI.white,
-                  color: isFlagged ? UI.danger : UI.muted,
-                  cursor: "pointer", minHeight: 32,
-                }}>Flag</button>
-              </div>
+              {!isWrong && (
+                <div style={{ fontSize: 11, color: UI.muted, flexShrink: 0 }}>
+                  Wrong?
+                </div>
+              )}
             </div>
           );
         })}
@@ -473,7 +484,7 @@ export default function AskDrFleshner() {
           width: "100%", marginTop: 10, padding: "12px 16px", borderRadius: 10,
           background: UI.accent, color: "#fff", border: "none",
           fontSize: 14, fontWeight: 600, cursor: "pointer",
-        }}>Submit</button>
+        }}>{flagged.size === 0 ? "All Correct — Confirm" : `Submit (${flagged.size} flagged)`}</button>
       </div>
     );
   }
