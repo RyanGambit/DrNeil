@@ -1868,12 +1868,10 @@ export default function AskDrFleshner() {
       // Parse and strip UI tags (ED only) before storing
       const { cleanText: assistantText, uiBlocks } = parseUITags(assistantRaw);
 
-      // Fallback: if ED consultation and message ends with ? but AI omitted tags,
-      // auto-generate a Yes/No chips block so the patient always gets tappable options
-      let finalBlocks = uiBlocks;
-      if (finalBlocks.length === 0 && detectedCondition === "ed" && assistantText.trimEnd().endsWith("?")) {
-        finalBlocks = [{ type: "chips", options: ["Yes", "No"] }];
-      }
+      // No fallback — if AI omits [CHIPS:] tag, show only the text field.
+      // A wrong chip suggestion (e.g. Yes/No on "How much do you drink?") is
+      // worse than no chips. The text input is always available at the bottom.
+      const finalBlocks = uiBlocks;
 
       setMessages((prev) => [
         ...prev,
