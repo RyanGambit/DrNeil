@@ -270,49 +270,122 @@ function renderMarkdown(text) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// TAG PARSER — Extracts [CONFIRM:], [YESNO:], [CHIPS:] tags from AI messages
+// KEYWORD-MATCHED CHIP SYSTEM — No AI tags, frontend does all the work
 // ═══════════════════════════════════════════════════════════════════════
-function parseUITags(text) {
-  if (!text) return { cleanText: text, uiBlocks: [] };
+const ED_CHIP_MAP = [
+  // Phase 1: Opening
+  { match: "chest pain during or after sex", chips: ["No, none of those", "Yes — one or more of these"] },
+  { match: "ready to get started", chips: ["Yes, let's go", "I have a question first"] },
+  // Phase 2: Intake (Q6-Q10)
+  { match: "smoke, or have you ever", chips: ["Never", "I used to", "Yes, currently"] },
+  { match: "how many cigarettes a day", chips: ["A few cigarettes", "Half a pack", "About a pack", "More than a pack"] },
+  { match: "how many years did you smoke", chips: ["Under 5 years", "5–10 years", "10–20 years", "20+ years"] },
+  { match: "roughly how many years", chips: ["Under 5 years", "5–10 years", "10–20 years", "20+ years"] },
+  { match: "alcohol do you drink", chips: ["Don't drink", "A few drinks", "Moderate", "Heavy"] },
+  { match: "do you use cannabis", chips: ["No", "Occasionally", "Yes, regularly"] },
+  { match: "do you get regular exercise", chips: ["Not really", "Some, not regularly", "Yes, most days"] },
+  { match: "how active are you", chips: ["Not really", "Some, not regularly", "Yes, most days"] },
+  { match: "currently in a relationship", chips: ["Yes", "No"] },
+  // Phase 3: SHIM
+  { match: "rate your confidence that you could get and keep", chips: ["a) Very low", "b) Low", "c) Moderate", "d) High", "e) Very high"], layout: "scored" },
+  { match: "sexually active in the past 6 months", chips: ["Yes", "No"] },
+  { match: "is that because there", chips: ["No partner right now", "Avoiding it because of ED", "Interest has dropped off", "Other reason"] },
+  { match: "how often were your erections hard enough for sex", chips: ["a) Almost never", "b) Less than half the time", "c) About half the time", "d) More than half the time", "e) Almost always"], layout: "scored" },
+  { match: "able to keep your erection after you got going", chips: ["a) Almost never", "b) Less than half the time", "c) About half the time", "d) More than half the time", "e) Almost always"], layout: "scored" },
+  { match: "how hard was it to keep your erection all the way", chips: ["a) Extremely hard", "b) Very hard", "c) Hard", "d) A little hard", "e) Not hard at all"], layout: "scored" },
+  { match: "how often was it satisfying", chips: ["a) Almost never", "b) Less than half the time", "c) About half the time", "d) More than half the time", "e) Almost always"], layout: "scored" },
+  // Phase 4: Clinical History
+  { match: "morning erections", chips: ["Yes, most mornings", "Sometimes / partial", "No, not anymore"] },
+  { match: "on your own, can you get and keep", chips: ["Yes, works fine alone", "Sometimes", "No, same problem alone"] },
+  { match: "every time, or only in certain situations", chips: ["Every time, consistently", "Only in certain situations"] },
+  { match: "come on gradually over time, or", chips: ["Gradually, over time", "More suddenly"] },
+  { match: "gradually or more sudden", chips: ["Gradually, over time", "More suddenly"] },
+  { match: "getting hard in the first place, or getting hard but", chips: ["Trouble getting hard", "Get hard but lose it"] },
+  { match: "main issue getting hard or keeping", chips: ["Trouble getting hard", "Get hard but lose it"] },
+  { match: "stress, anxiety, or relationship tension", chips: ["Yes, definitely", "Not really"] },
+  { match: "pills or treatments for erections", chips: ["Yes", "No, never tried anything"] },
+  { match: "which pill", chips: ["Viagra (sildenafil)", "Cialis (tadalafil)", "Don't remember"] },
+  { match: "how many times did you try", chips: ["Once or twice", "3–4 times", "5–6 times", "More than 6"] },
+  { match: "empty stomach or after a big meal", chips: ["Empty / light stomach", "After a big meal", "Don't remember"] },
+  { match: "how long before sex", chips: ["Right before", "15–30 min", "30–60 min", "1–2 hours", "Don't remember"] },
+  { match: "how long did you wait", chips: ["Right before", "15–30 min", "30–60 min", "1–2 hours", "Don't remember"] },
+  { match: "were you turned on", chips: ["Yes", "No / not sure"] },
+  { match: "were you sexually stimulated", chips: ["Yes", "No / not sure"] },
+  { match: "what made you decide it wasn't working", chips: ["Didn't work at all", "Helped some, not enough", "Side effects", "Other reason"] },
+  { match: "bothers you the most", chips: ["Affecting my relationship", "Less confident", "Worried something's wrong", "Just want it fixed"] },
+  // Etiology Conflict Probes
+  { match: "do you mean over a few weeks or literally overnight", chips: ["A few weeks / months", "Literally overnight / days"] },
+  { match: "anxiety or pressure is getting in the way", chips: ["Yes, that rings true", "No, doesn't feel like anxiety"] },
+  { match: "completely on your own with no pressure", chips: ["Yes, fully on my own", "No, same problem"] },
+  // Conditional Follow-ups
+  { match: "interest in sex still there, or has that dropped", chips: ["Interest is still there", "Interest has dropped off"] },
+  { match: "fatigue, low energy, or mood changes", chips: ["Yes", "No"] },
+  { match: "start around the time you began a new medication", chips: ["Yes, around that time", "No, unrelated"] },
+  { match: "bend or curve in the penis", chips: ["Yes", "No"] },
+  // Partner
+  { match: "how is your partner handling", chips: ["They're supportive", "It's causing tension", "We don't talk about it", "They don't know"] },
+  // Outcome Delivery
+  { match: "which sounds better for you", chips: ["On-demand — take before sex", "Daily — small pill every day"] },
+  { match: "sound good so far", chips: ["Sounds good", "I have a question"] },
+  { match: "any questions about that", chips: ["All good", "I have a question"] },
+];
 
-  const uiBlocks = [];
-  let cleanText = text;
+function getChipsForMessage(messageText, condition) {
+  if (condition !== "ed") return null;
+  const lower = messageText.toLowerCase();
+  for (const entry of ED_CHIP_MAP) {
+    if (lower.includes(entry.match.toLowerCase())) {
+      return { chips: entry.chips, layout: entry.layout || "horizontal" };
+    }
+  }
+  return null;
+}
 
-  // Parse [CONFIRM:label|value] tags
-  const confirmRegex = /\[CONFIRM:([^|]+)\|([^\]]+)\]/g;
-  let match;
-  const confirms = [];
-  while ((match = confirmRegex.exec(text)) !== null) {
-    confirms.push({ label: match[1].trim(), value: match[2].trim() });
-  }
-  if (confirms.length > 0) {
-    uiBlocks.push({ type: "confirm", fields: confirms });
-    cleanText = cleanText.replace(/\[CONFIRM:[^\]]+\]\n?/g, "").trimEnd();
-  }
+// Stacked section detection
+const STACKED_SECTIONS = [
+  { match: "here's what i have", type: "confirm" },
+  { match: "just a few safety questions before we talk about treatment", type: "yesno" },
+  { match: "four final checks before we get your prescription", type: "yesno" },
+];
 
-  // Parse [YESNO:question] tags
-  const yesnoRegex = /\[YESNO:([^\]]+)\]/g;
-  const yesnos = [];
-  while ((match = yesnoRegex.exec(text)) !== null) {
-    yesnos.push({ question: match[1].trim() });
+function getStackedSection(messageText) {
+  const lower = messageText.toLowerCase();
+  for (const section of STACKED_SECTIONS) {
+    if (lower.includes(section.match)) return section.type;
   }
-  if (yesnos.length > 0) {
-    uiBlocks.push({ type: "yesno", questions: yesnos });
-    cleanText = cleanText.replace(/\[YESNO:[^\]]+\]\n?/g, "").trimEnd();
-  }
+  return null;
+}
 
-  // Parse [CHIPS:opt1|opt2|opt3] tag — detect SHIM scored (a-e) vs regular chips
-  const chipsRegex = /\[CHIPS:([^\]]+)\]/;
-  const chipsMatch = text.match(chipsRegex);
-  if (chipsMatch) {
-    const opts = chipsMatch[1].split("|").map(o => o.trim());
-    // SHIM scored choices start with "a) " — render as vertical ScoredChips
-    const isScored = opts.length === 5 && opts[0].match(/^a\)/i);
-    uiBlocks.push({ type: isScored ? "scored" : "chips", options: opts });
-    cleanText = cleanText.replace(/\[CHIPS:[^\]]+\]\n?/g, "").trimEnd();
+function parseConfirmFields(messageText) {
+  const lines = messageText.split("\n");
+  const fields = [];
+  for (const line of lines) {
+    const match = line.match(/^([A-Z][a-zA-Z\s]+):\s*(.+)$/);
+    if (match) fields.push({ label: match[1].trim(), value: match[2].trim() });
   }
+  return fields;
+}
 
-  return { cleanText, uiBlocks };
+function parseYesNoQuestions(messageText) {
+  const lines = messageText.split("\n");
+  const questions = [];
+  for (const line of lines) {
+    const match = line.match(/^\d+\.\s*(.+)/);
+    if (match) questions.push(match[1].trim());
+  }
+  return questions;
+}
+
+function getDisplayText(msg, condition) {
+  if (msg.role !== "assistant" || condition !== "ed") return msg.text;
+  const stackedType = getStackedSection(msg.text);
+  if (stackedType === "confirm") {
+    return msg.text.split("\n").filter(line => !line.match(/^[A-Z][a-zA-Z\s]+:\s*.+$/)).join("\n");
+  }
+  if (stackedType === "yesno") {
+    return msg.text.split("\n").filter(line => !line.match(/^\d+\.\s*.+/)).join("\n");
+  }
+  return msg.text;
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -714,23 +787,6 @@ export default function AskDrFleshner() {
     );
   }
 
-  // ── Render UI blocks for a message ──
-  const renderUIBlocks = (uiBlocks, messageIndex) => {
-    return uiBlocks.map((block, bi) => {
-      switch (block.type) {
-        case "confirm":
-          return <ConfirmPanel key={bi} fields={block.fields} messageIndex={messageIndex} />;
-        case "yesno":
-          return <YesNoPanel key={bi} questions={block.questions} messageIndex={messageIndex} />;
-        case "scored":
-          return <ScoredChips key={bi} options={block.options} messageIndex={messageIndex} />;
-        case "chips":
-          return <ChipsWithTextField key={bi} options={block.options} messageIndex={messageIndex} />;
-        default:
-          return null;
-      }
-    });
-  };
 
   // Load saved custom scenarios on mount
   useEffect(() => {
@@ -1865,17 +1921,10 @@ export default function AskDrFleshner() {
         .map((b) => b.text)
         .join("\n") || "I'm sorry, I had trouble processing that. Could you try again?";
 
-      // Parse and strip UI tags (ED only) before storing
-      const { cleanText: assistantText, uiBlocks } = parseUITags(assistantRaw);
-
-      // No fallback — if AI omits [CHIPS:] tag, show only the text field.
-      // A wrong chip suggestion (e.g. Yes/No on "How much do you drink?") is
-      // worse than no chips. The text input is always available at the bottom.
-      const finalBlocks = uiBlocks;
-
+      // No tag parsing needed — frontend uses keyword matching
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", text: assistantText, uiBlocks: finalBlocks.length > 0 ? finalBlocks : null, time: new Date() },
+        { role: "assistant", text: assistantRaw, time: new Date() },
       ]);
     } catch (err) {
       console.error("API error:", err);
@@ -2098,17 +2147,32 @@ export default function AskDrFleshner() {
                   <div style={{ ...styles.messageBubbleRow, justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
                     {msg.role === "assistant" && <img src={DR_AVATAR} alt="" style={styles.msgAvatar} />}
                     <div style={{ ...(msg.role === "user" ? styles.userBubble : styles.assistantBubble), maxWidth: isMobile ? "90%" : "75%" }}>
-                      <div style={styles.bubbleText} dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.text) }} />
+                      <div style={styles.bubbleText} dangerouslySetInnerHTML={{ __html: renderMarkdown(getDisplayText(msg, detectedCondition)) }} />
                     </div>
                   </div>
-                  {msg.role === "assistant" && msg.uiBlocks && detectedCondition === "ed" && (
-                    <>
-                      {renderUIBlocks(msg.uiBlocks, i)}
-                      {panelStates[i]?.submitted && (
-                        <SubmittedChip text={panelStates[i].response} />
-                      )}
-                    </>
-                  )}
+                  {msg.role === "assistant" && detectedCondition === "ed" && (() => {
+                    const stackedType = getStackedSection(msg.text);
+                    const chipResult = getChipsForMessage(msg.text, detectedCondition);
+                    if (!stackedType && !chipResult) return null;
+                    return (
+                      <>
+                        {!panelStates[i]?.submitted && (
+                          stackedType === "confirm" ? (
+                            <ConfirmPanel fields={parseConfirmFields(msg.text)} messageIndex={i} />
+                          ) : stackedType === "yesno" ? (
+                            <YesNoPanel questions={parseYesNoQuestions(msg.text)} messageIndex={i} />
+                          ) : chipResult?.layout === "scored" ? (
+                            <ScoredChips options={chipResult.chips} messageIndex={i} />
+                          ) : chipResult ? (
+                            <ChipsWithTextField options={chipResult.chips} messageIndex={i} />
+                          ) : null
+                        )}
+                        {panelStates[i]?.submitted && (
+                          <SubmittedChip text={panelStates[i].response} />
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               );
             })}
