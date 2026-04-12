@@ -758,7 +758,7 @@ not suggestions — they are scripted beats. If you skip them, the patient loses
 sense of where they are in the conversation.
 
 USE PROGRESS CUES:
-- At the START of a section: "About nine quick background questions, then we'll get to the important stuff."
+- At the START of a section: "About ten quick background questions, then we'll get to the important stuff."
 - At MIDPOINTS: "Good — past the halfway mark. Three more."
 - At TRANSITIONS: "That's the baseline questions done. Now the ones that really matter."
 - At NEAR-END: "Almost done — one more."
@@ -1292,6 +1292,9 @@ Present all three as ONE stacked message:
 
 Just yes or no for each."
 
+CLARIFICATION RULE: If the patient answers any CV question ambiguously,
+clarify with a simpler rephrased version before routing.
+
 ROUTING AFTER PATIENT RESPONDS:
 - Q1: No or uncertain → Outcome C
 - Q2: Yes (had event) → Outcome C
@@ -1409,10 +1412,14 @@ Present all four checks as ONE stacked message:
 Just yes or no for each."
 
 ROUTING AFTER PATIENT RESPONDS:
-- Q1: Patient confirms nitrates → ABSOLUTE STOP. Outcome C.
-- Q2: Uncertain → Outcome C.
-- Q3: Yes (alpha-blocker) → Can proceed with timing adjustment. Document.
-- Q4: Yes (priapism/sickle cell) → Outcome C.
+- Q1 (NITRATE RE-CHECK — confirm even if asked before during intake):
+  Patient confirms nitrates → ABSOLUTE STOP. Outcome C.
+- Q2 (CV FITNESS RE-CHECK — already answered in CV screen, this is confirmation):
+  Uncertain → Outcome C.
+- Q3 (ALPHA-BLOCKER CHECK):
+  Yes → Can proceed with timing adjustment. Document.
+- Q4 (PRIAPISM / SICKLE CELL):
+  Yes → Outcome C.
 - If ANY gate fails → explain which one and why it changes things
 
 IF ALL GATES PASS → OUTCOME B
