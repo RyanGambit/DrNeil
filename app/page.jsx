@@ -270,6 +270,23 @@ function renderMarkdown(text) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
+// COMPONENT TAG PARSER — Extracts [COMPONENT:type|opt1|opt2|...] from AI messages
+// ═══════════════════════════════════════════════════════════════════════
+function parseComponentTag(text) {
+  if (!text) return { cleanText: text, component: null };
+  const regex = /\[COMPONENT:(\w+)\|([^\]]+)\]\s*$/;
+  const match = text.match(regex);
+  if (!match) return { cleanText: text, component: null };
+  return {
+    cleanText: text.replace(regex, "").trimEnd(),
+    component: {
+      type: match[1],
+      options: match[2].split("|").map(o => o.trim()),
+    },
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════════════
 // MAIN APP COMPONENT
 // ═══════════════════════════════════════════════════════════════════════
 export default function AskDrFleshner() {
@@ -299,6 +316,9 @@ export default function AskDrFleshner() {
   const [storageReady, setStorageReady] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef(null);
+  // ── UI Component State (ED only) ──
+  const [shimScores, setShimScores] = useState([]);
+  const [componentStates, setComponentStates] = useState({});
   const [conversationId] = useState(() => `consult-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -313,6 +333,374 @@ export default function AskDrFleshner() {
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
   }, []);
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // UI COMPONENT SYSTEM — ED Only
+  // ═══════════════════════════════════════════════════════════════════════
+
+  const COMP = {
+    accent: "#1a6b4e",
+    accentLight: "#e8f5ef",
+    white: "#ffffff",
+    border: "#e2e8f0",
+    unselectedBorder: "#cbd5e0",
+    unselectedText: "#4a5568",
+    muted: "#8892a4",
+    text: "#1a1a2e",
+  };
+
+  const handleComponentSelect = (messageIndex, selectedText, shimScore = null) => {
+    setComponentStates((prev) => ({
+      ...prev,
+      [messageIndex]: { ...prev[messageIndex], submitted: true, selected: selectedText },
+    }));
+    if (shimScore !== null) {
+      setShimScores((prev) => [...prev, shimScore]);
+    }
+    setTimeout(() => {
+      sendToAPI(messages, selectedText);
+    }, 350);
+  };
+
+  function ChecklistComponent({ options, messageIndex }) {
+    const state = componentStates[messageIndex];
+    const [checked, setChecked] = useState([]);
+    const isSubmitted = state?.submitted;
+    const noneIndex = options.findIndex((o) => /none/i.test(o));
+
+    const toggle = (idx) => {
+      if (isSubmitted) return;
+      if (idx === noneIndex) {
+        setChecked(checked.includes(idx) ? [] : [idx]);
+      } else {
+        const without = checked.filter((i) => i !== noneIndex);
+        setChecked(
+          without.includes(idx) ? without.filter((i) => i !== idx) : [...without, idx]
+        );
+      }
+    };
+
+    const handleSubmit = () => {
+      if (checked.length === 0 || isSubmitted) return;
+      const selected = checked.map((i) => options[i]).join(", ");
+      handleComponentSelect(messageIndex, selected);
+    };
+
+    return (
+      <div style={{ background: COMP.white, border: `1px solid ${COMP.border}`, borderRadius: 12, padding: 12 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: COMP.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>
+          Tap all that apply
+        </div>
+        {options.map((item, i) => {
+          const isSel = checked.includes(i);
+          return (
+            <div
+              key={i}
+              onClick={() => toggle(i)}
+              style={{
+                display: "flex", alignItems: "center", gap: 10,
+                padding: "8px 10px", borderRadius: 8, marginBottom: 4,
+                background: isSel ? COMP.accentLight : "transparent",
+                cursor: isSubmitted ? "default" : "pointer",
+                opacity: isSubmitted && !isSel ? 0.5 : 1,
+              }}
+            >
+              <div style={{
+                width: 20, height: 20, borderRadius: 4, flexShrink: 0,
+                border: `2px solid ${isSel ? COMP.accent : COMP.border}`,
+                background: isSel ? COMP.accent : COMP.white,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                minWidth: 20, minHeight: 20,
+              }}>
+                {isSel && (
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                    <path d="M2.5 6L5 8.5L9.5 3.5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                )}
+              </div>
+              <span style={{ fontSize: 14, color: COMP.text }}>{item}</span>
+            </div>
+          );
+        })}
+        {!isSubmitted && (
+          <button
+            onClick={handleSubmit}
+            style={{
+              width: "100%", marginTop: 8, padding: "11px 16px", borderRadius: 10,
+              background: checked.length > 0 ? COMP.accent : COMP.border,
+              color: checked.length > 0 ? "#fff" : COMP.muted,
+              border: "none", fontSize: 14, fontWeight: 600, cursor: checked.length > 0 ? "pointer" : "default",
+            }}
+          >
+            Done
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  function OpenTextComponent({ options, messageIndex }) {
+    const state = componentStates[messageIndex];
+    const [textValue, setTextValue] = useState("");
+    const isSubmitted = state?.submitted;
+
+    const handleSubmit = () => {
+      if (!textValue.trim() || isSubmitted) return;
+      handleComponentSelect(messageIndex, textValue.trim());
+    };
+
+    return (
+      <div>
+        <div style={{
+          background: COMP.white, border: `1px solid ${COMP.border}`, borderRadius: 12,
+          padding: 12, marginBottom: 6,
+        }}>
+          <textarea
+            value={textValue}
+            onChange={(e) => setTextValue(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
+            placeholder="Type your answer..."
+            disabled={isSubmitted}
+            style={{
+              width: "100%", border: "none", outline: "none", resize: "none",
+              fontSize: 14, lineHeight: 1.5, minHeight: 50, fontFamily: "inherit",
+              color: COMP.text, background: "transparent",
+            }}
+          />
+        </div>
+        {!isSubmitted && options && options.length > 0 && (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
+            {options.map((chip, i) => (
+              <span
+                key={i}
+                onClick={() => setTextValue(chip)}
+                style={{
+                  padding: "7px 14px", borderRadius: 16, fontSize: 12,
+                  border: `1px solid ${COMP.border}`, color: COMP.muted,
+                  background: COMP.white, cursor: "pointer",
+                }}
+              >
+                {chip}
+              </span>
+            ))}
+          </div>
+        )}
+        {!isSubmitted && (
+          <button
+            onClick={handleSubmit}
+            style={{
+              width: "100%", padding: "11px 16px", borderRadius: 10,
+              background: textValue.trim() ? COMP.accent : COMP.border,
+              color: textValue.trim() ? "#fff" : COMP.muted,
+              border: "none", fontSize: 14, fontWeight: 600,
+              cursor: textValue.trim() ? "pointer" : "default",
+            }}
+          >
+            Send
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  function YesNoComponent({ options, messageIndex }) {
+    const state = componentStates[messageIndex];
+    const isSubmitted = state?.submitted;
+    const [extraText, setExtraText] = useState("");
+
+    const handleSelect = (label) => {
+      if (isSubmitted) return;
+      const finalText = extraText.trim() ? `${label} — ${extraText.trim()}` : label;
+      handleComponentSelect(messageIndex, finalText);
+    };
+
+    return (
+      <div>
+        <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
+          {options.map((label, i) => {
+            const isSel = state?.selected?.startsWith(label);
+            return (
+              <button
+                key={i}
+                onClick={() => handleSelect(label)}
+                disabled={isSubmitted}
+                style={{
+                  flex: 1, padding: "12px 8px", borderRadius: 10, fontSize: 14,
+                  fontWeight: 600, border: `1.5px solid ${isSel ? COMP.accent : COMP.border}`,
+                  background: isSel ? COMP.accentLight : COMP.white,
+                  color: isSel ? COMP.accent : COMP.unselectedText,
+                  cursor: isSubmitted ? "default" : "pointer",
+                  opacity: isSubmitted && !isSel ? 0.5 : 1,
+                  minHeight: 44,
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+        {!isSubmitted && (
+          <textarea
+            value={extraText}
+            onChange={(e) => setExtraText(e.target.value)}
+            placeholder="Want to add anything? (optional)"
+            style={{
+              width: "100%", padding: "8px 12px", borderRadius: 10,
+              border: `1px solid ${COMP.border}`, fontSize: 13,
+              fontFamily: "inherit", resize: "none", minHeight: 0,
+              color: COMP.text, outline: "none", lineHeight: 1.4,
+            }}
+            rows={1}
+          />
+        )}
+      </div>
+    );
+  }
+
+  const renderUIComponent = (component, messageIndex) => {
+    const state = componentStates[messageIndex];
+    const isSubmitted = state?.submitted;
+
+    switch (component.type) {
+      case "confirm_buttons":
+        return (
+          <div style={{ display: "flex", gap: 8 }}>
+            {component.options.map((label, i) => {
+              const isSel = state?.selected === label;
+              return (
+                <button
+                  key={i}
+                  onClick={() => !isSubmitted && handleComponentSelect(messageIndex, label)}
+                  disabled={isSubmitted}
+                  style={{
+                    flex: 1, padding: "12px 8px", borderRadius: 10, fontSize: 14,
+                    fontWeight: 600, border: `1.5px solid ${isSel ? COMP.accent : COMP.border}`,
+                    background: isSel ? COMP.accentLight : COMP.white,
+                    color: isSel ? COMP.accent : COMP.unselectedText,
+                    cursor: isSubmitted ? "default" : "pointer",
+                    opacity: isSubmitted && !isSel ? 0.5 : 1,
+                    minHeight: 44,
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        );
+
+      case "yes_no":
+        return <YesNoComponent options={component.options} messageIndex={messageIndex} />;
+
+      case "multi_option":
+      case "range_select":
+        return (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {component.options.map((label, i) => {
+              const isSel = state?.selected === label;
+              return (
+                <button
+                  key={i}
+                  onClick={() => !isSubmitted && handleComponentSelect(messageIndex, label)}
+                  disabled={isSubmitted}
+                  style={{
+                    padding: "10px 16px", borderRadius: 20, fontSize: 13,
+                    fontWeight: 500, border: `1.5px solid ${isSel ? COMP.accent : COMP.unselectedBorder}`,
+                    background: isSel ? COMP.accentLight : COMP.white,
+                    color: isSel ? COMP.accent : COMP.unselectedText,
+                    cursor: isSubmitted ? "default" : "pointer",
+                    opacity: isSubmitted && !isSel ? 0.5 : 1,
+                    minHeight: 44,
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        );
+
+      case "scored_choice":
+        return (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {component.options.map((opt, i) => {
+              const letter = String.fromCharCode(97 + i);
+              const score = i + 1;
+              // Strip leading "a) " etc. from the label if AI included it
+              const cleanLabel = opt.replace(/^[a-e]\)\s*/i, "");
+              const isSel = state?.selected === cleanLabel;
+              return (
+                <button
+                  key={i}
+                  onClick={() => !isSubmitted && handleComponentSelect(messageIndex, cleanLabel, score)}
+                  disabled={isSubmitted}
+                  style={{
+                    padding: "10px 14px", borderRadius: 10, fontSize: 14,
+                    border: `1.5px solid ${isSel ? COMP.accent : COMP.border}`,
+                    background: isSel ? COMP.accentLight : COMP.white,
+                    color: isSel ? COMP.accent : COMP.unselectedText,
+                    cursor: isSubmitted ? "default" : "pointer",
+                    textAlign: "left",
+                    display: "flex", alignItems: "center", gap: 10,
+                    fontWeight: isSel ? 600 : 400,
+                    opacity: isSubmitted && !isSel ? 0.5 : 1,
+                    minHeight: 44,
+                  }}
+                >
+                  <span style={{
+                    width: 26, height: 26, borderRadius: 6, fontSize: 12, fontWeight: 700,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    background: isSel ? COMP.accent : "#f1f5f9",
+                    color: isSel ? "#fff" : COMP.muted,
+                    flexShrink: 0,
+                  }}>
+                    {letter}
+                  </span>
+                  {cleanLabel}
+                </button>
+              );
+            })}
+          </div>
+        );
+
+      case "either_or_card":
+        return (
+          <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 8 }}>
+            {component.options.map((label, i) => {
+              const isSel = state?.selected === label;
+              return (
+                <button
+                  key={i}
+                  onClick={() => !isSubmitted && handleComponentSelect(messageIndex, label)}
+                  disabled={isSubmitted}
+                  style={{
+                    flex: 1, padding: "14px 16px", borderRadius: 12, fontSize: 13,
+                    lineHeight: 1.5, textAlign: "left",
+                    border: `1.5px solid ${isSel ? COMP.accent : COMP.border}`,
+                    background: isSel ? COMP.accentLight : COMP.white,
+                    color: isSel ? COMP.accent : COMP.unselectedText,
+                    cursor: isSubmitted ? "default" : "pointer",
+                    opacity: isSubmitted && !isSel ? 0.5 : 1,
+                    minHeight: 44, fontWeight: isSel ? 600 : 400,
+                  }}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        );
+
+      case "checklist":
+        return <ChecklistComponent options={component.options} messageIndex={messageIndex} />;
+
+      case "open_text":
+        return <OpenTextComponent options={component.options} messageIndex={messageIndex} />;
+
+      default:
+        return null;
+    }
+  };
 
   // Load saved custom scenarios on mount
   useEffect(() => {
@@ -1442,14 +1830,17 @@ export default function AskDrFleshner() {
       });
 
       const data = await response.json();
-      const assistantText = data.content
+      const assistantRaw = data.content
         ?.filter((b) => b.type === "text")
         .map((b) => b.text)
         .join("\n") || "I'm sorry, I had trouble processing that. Could you try again?";
 
+      // Parse and strip component tag (ED only) before storing
+      const { cleanText: assistantText, component: assistantComponent } = parseComponentTag(assistantRaw);
+
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", text: assistantText, time: new Date() },
+        { role: "assistant", text: assistantText, component: assistantComponent, time: new Date() },
       ]);
     } catch (err) {
       console.error("API error:", err);
@@ -1664,11 +2055,26 @@ export default function AskDrFleshner() {
               </div>
             )}
             {displayMessages.map((msg, i) => (
-              <div key={i} style={{ ...styles.messageBubbleRow, justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
-                {msg.role === "assistant" && <img src={DR_AVATAR} alt="" style={styles.msgAvatar} />}
-                <div style={{ ...(msg.role === "user" ? styles.userBubble : styles.assistantBubble), maxWidth: isMobile ? "90%" : "75%" }}>
-                  <div style={styles.bubbleText} dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.text) }} />
+              <div key={i}>
+                <div style={{ ...styles.messageBubbleRow, justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
+                  {msg.role === "assistant" && <img src={DR_AVATAR} alt="" style={styles.msgAvatar} />}
+                  <div style={{ ...(msg.role === "user" ? styles.userBubble : styles.assistantBubble), maxWidth: isMobile ? "90%" : "75%" }}>
+                    <div style={styles.bubbleText} dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.text) }} />
+                  </div>
                 </div>
+                {msg.role === "assistant" && msg.component && detectedCondition === "ed" && (
+                  <div style={{
+                    marginLeft: 40,
+                    marginBottom: 14,
+                    maxWidth: isMobile ? "90%" : "75%",
+                    opacity: componentStates[i]?.submitted ? 0 : 1,
+                    maxHeight: componentStates[i]?.submitted ? 0 : 2000,
+                    transition: "opacity 0.3s ease, max-height 0.3s ease",
+                    overflow: "hidden",
+                  }}>
+                    {renderUIComponent(msg.component, i)}
+                  </div>
+                )}
               </div>
             ))}
             {isLoading && (

@@ -843,6 +843,45 @@ more like [Y]. Which fits better most of the time?"
 Keep it neutral, not accusatory. People remember things as they talk. This is especially
 common with ED because the topic is sensitive and patients may downplay early answers
 then open up as they get comfortable.
+
+═══════════════════════════════════════════════════════════════════════════════
+UI COMPONENT RULE — ED CONSULTATION ONLY
+═══════════════════════════════════════════════════════════════════════════════
+
+When asking a question, include a component tag at the END of your message
+to signal how the patient should respond. The frontend will render the
+appropriate interactive element.
+
+FORMAT: [COMPONENT:type|option1|option2|option3...]
+
+AVAILABLE TYPES:
+- confirm_buttons: Two buttons for confirming data (e.g., Yes | No, that's wrong)
+- yes_no: Two buttons with optional text elaboration
+- multi_option: 3-4 tappable choices, pick one
+- range_select: Tappable range/quantity chips, pick one
+- scored_choice: SHIM a-e options (score silently, NEVER show score to patient)
+- either_or_card: Two described option cards
+- checklist: Multiple checkboxes, select all that apply + "None of these" as last option
+- open_text: Text box with optional quick-reply chip suggestions
+
+RULES:
+- Include exactly ONE component tag per message, at the very end
+- Do NOT include a tag on messages that don't need a patient response (transitions,
+  explanations, progress cues without questions, outcome delivery text)
+- If the patient types a free-text response instead of using the component, interpret
+  their text normally — do NOT ask them to use the component
+- NEVER mention the components, tags, or UI elements in your conversational text —
+  they are invisible to the patient
+- All existing conversation rules still apply (tone, progress cues, one question per message)
+- For scored_choice (SHIM), always format options as: a) Label|b) Label|c) Label|d) Label|e) Label
+- For checklist, always include "None of these" as the final option
+
+EXAMPLE:
+Your message: "Do you smoke, or have you ever?
+[COMPONENT:multi_option|Never|I used to|Yes, currently]"
+
+The patient sees your question as a chat bubble with three tappable chips below it.
+They tap "I used to" and it appears as their chat response. You then continue normally.
 </conversation_rules>
 
 ---
