@@ -444,10 +444,15 @@ function getDisplayText(msg, condition) {
   if (msg.role !== "assistant" || condition !== "ed") return msg.text;
   const stackedType = getStackedSection(msg.text);
   if (stackedType === "confirm") {
-    return msg.text.split("\n").filter(line => !line.match(/^[A-Z][a-zA-Z\s]+:\s*.+$/)).join("\n");
+    return msg.text.split("\n").filter(line => !line.match(/^\*{0,2}[A-Z][a-zA-Z\s]+?\*{0,2}:\*{0,2}\s*.+$/)).join("\n");
   }
   if (stackedType === "yesno") {
     return msg.text.split("\n").filter(line => !line.match(/^\d+\.\s*.+/)).join("\n");
+  }
+  // Strip SHIM a-e option lines when scored chips are rendering
+  const chipResult = getChipsForMessage(msg.text, condition);
+  if (chipResult?.layout === "scored") {
+    return msg.text.split("\n").filter(line => !line.match(/^[a-e]\)\s+/)).join("\n");
   }
   return msg.text;
 }
