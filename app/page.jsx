@@ -274,14 +274,15 @@ function renderMarkdown(text) {
 // ═══════════════════════════════════════════════════════════════════════
 function parseComponentTag(text) {
   if (!text) return { cleanText: text, component: null };
-  const regex = /\[COMPONENT:(\w+)\|([^\]]+)\]\s*$/;
+  // Match tags with options: [COMPONENT:type|opt1|opt2] AND without: [COMPONENT:type]
+  const regex = /\[COMPONENT:(\w+)(?:\|([^\]]*))?\]\s*$/;
   const match = text.match(regex);
   if (!match) return { cleanText: text, component: null };
   return {
     cleanText: text.replace(regex, "").trimEnd(),
     component: {
       type: match[1],
-      options: match[2].split("|").map(o => o.trim()),
+      options: match[2] ? match[2].split("|").map(o => o.trim()).filter(Boolean) : [],
     },
   };
 }
@@ -561,11 +562,23 @@ export default function AskDrFleshner() {
     const state = componentStates[messageIndex];
     const isSubmitted = state?.submitted;
 
+    // Default options when AI omits them
+    const DEFAULT_OPTIONS = {
+      confirm_buttons: ["Yes", "No"],
+      yes_no: ["Yes", "No"],
+    };
+    const opts = component.options.length > 0
+      ? component.options
+      : (DEFAULT_OPTIONS[component.type] || ["Yes", "No"]);
+
+    // Use opts instead of component.options in renderers
+    const renderOpts = opts;
+
     switch (component.type) {
       case "confirm_buttons":
         return (
           <div style={{ display: "flex", gap: 8 }}>
-            {component.options.map((label, i) => {
+            {renderOpts.map((label, i) => {
               const isSel = state?.selected === label;
               return (
                 <button
@@ -590,13 +603,13 @@ export default function AskDrFleshner() {
         );
 
       case "yes_no":
-        return <YesNoComponent options={component.options} messageIndex={messageIndex} />;
+        return <YesNoComponent options={renderOpts} messageIndex={messageIndex} />;
 
       case "multi_option":
       case "range_select":
         return (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {component.options.map((label, i) => {
+            {renderOpts.map((label, i) => {
               const isSel = state?.selected === label;
               return (
                 <button
@@ -623,7 +636,7 @@ export default function AskDrFleshner() {
       case "scored_choice":
         return (
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {component.options.map((opt, i) => {
+            {renderOpts.map((opt, i) => {
               const letter = String.fromCharCode(97 + i);
               const score = i + 1;
               // Strip leading "a) " etc. from the label if AI included it
@@ -666,7 +679,7 @@ export default function AskDrFleshner() {
       case "either_or_card":
         return (
           <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 8 }}>
-            {component.options.map((label, i) => {
+            {renderOpts.map((label, i) => {
               const isSel = state?.selected === label;
               return (
                 <button
@@ -692,10 +705,10 @@ export default function AskDrFleshner() {
         );
 
       case "checklist":
-        return <ChecklistComponent options={component.options} messageIndex={messageIndex} />;
+        return <ChecklistComponent options={renderOpts} messageIndex={messageIndex} />;
 
       case "open_text":
-        return <OpenTextComponent options={component.options} messageIndex={messageIndex} />;
+        return <OpenTextComponent options={renderOpts} messageIndex={messageIndex} />;
 
       default:
         return null;
