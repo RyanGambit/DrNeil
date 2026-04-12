@@ -847,10 +847,9 @@ export default function AskDrFleshner() {
             }} />
           <button onClick={handleTextSend} style={{
             padding: "10px 20px", borderRadius: 10, border: "none",
-            background: textValue.trim() ? T.accent : T.border,
-            color: textValue.trim() ? "#fff" : T.textMuted,
+            background: T.accent, color: "#fff",
             fontSize: 13, fontWeight: 600, fontFamily: T.font,
-            cursor: textValue.trim() ? "pointer" : "default",
+            cursor: "pointer",
           }}>Send</button>
         </div>
       </div>
@@ -2960,36 +2959,37 @@ const styles = {
   },
   messageBubbleRow: {
     display: "flex",
-    alignItems: "flex-end",
-    gap: 8,
-    marginBottom: 14,
+    alignItems: "flex-start",
+    gap: 12,
+    marginBottom: 6,
   },
   msgAvatar: {
-    width: 32,
-    height: 32,
+    width: 36,
+    height: 36,
     borderRadius: "50%",
     objectFit: "cover",
     flexShrink: 0,
-    border: "1.5px solid #1A6B5B",
+    border: "1.5px solid #0f7b6c",
+    marginTop: 2,
   },
   userBubble: {
-    background: "#1A6B5B",
-    color: "#F5FBF9",
-    padding: "12px 18px",
-    borderRadius: "18px 18px 4px 18px",
-    maxWidth: "75%",
+    background: "#0f7b6c",
+    color: "#ffffff",
+    padding: "11px 18px",
+    borderRadius: "16px 4px 16px 16px",
+    maxWidth: "70%",
+    fontWeight: 500,
   },
   assistantBubble: {
-    background: "#FFFFFF",
-    color: "#1F2937",
-    padding: "12px 18px",
-    borderRadius: "18px 18px 18px 4px",
-    maxWidth: "75%",
-    border: "1px solid #D8F0EA",
+    background: "#f1f3f7",
+    color: "#1a1e2c",
+    padding: "13px 18px",
+    borderRadius: "4px 16px 16px 16px",
+    maxWidth: "78%",
   },
   bubbleText: {
     margin: 0,
-    fontSize: 17,
+    fontSize: 15,
     lineHeight: 1.6,
   },
   typingDots: {
