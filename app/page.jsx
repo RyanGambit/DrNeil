@@ -423,7 +423,8 @@ function parseConfirmFields(messageText) {
   const lines = messageText.split("\n");
   const fields = [];
   for (const line of lines) {
-    const match = line.match(/^([A-Z][a-zA-Z\s]+):\s*(.+)$/);
+    // Handle both plain "Age: 58" and markdown "**Age:** 58" formats
+    const match = line.match(/^\*{0,2}([A-Z][a-zA-Z\s]+?)\*{0,2}:\*{0,2}\s*(.+)$/);
     if (match) fields.push({ label: match[1].trim(), value: match[2].trim() });
   }
   return fields;
