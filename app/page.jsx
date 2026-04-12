@@ -359,9 +359,26 @@ export default function AskDrFleshner() {
       setShimScores((prev) => [...prev, shimScore]);
     }
     setTimeout(() => {
-      sendToAPI(messages, selectedText);
+      // Mark this message as component-submitted so it renders as a chip, not a regular bubble
+      sendToAPI(messages, selectedText, true, true);
     }, 350);
   };
+
+  // Selected chip — matches reference design: green pill with checkmark, right-aligned
+  const SelectedChip = ({ text }) => (
+    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
+      <span style={{
+        background: COMP.accent, color: "#fff", padding: "7px 14px",
+        borderRadius: 20, fontSize: 13, fontWeight: 500,
+        display: "inline-flex", alignItems: "center", gap: 6,
+      }}>
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M3 7L6 10L11 4" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+        </svg>
+        {text}
+      </span>
+    </div>
+  );
 
   function ChecklistComponent({ options, messageIndex }) {
     const state = componentStates[messageIndex];
@@ -1804,14 +1821,14 @@ export default function AskDrFleshner() {
   }
 
   // ── CHAT SCREEN ──
-  async function sendToAPI(history, userMessage, showUserMsg = true) {
+  async function sendToAPI(history, userMessage, showUserMsg = true, isComponentSubmission = false) {
     setIsLoading(true);
 
     // Show user message immediately (except for the initial context message)
     if (showUserMsg) {
       setMessages((prev) => [
         ...prev,
-        { role: "user", text: userMessage, time: new Date() },
+        { role: "user", text: userMessage, time: new Date(), isComponentSubmission },
       ]);
     }
     
@@ -2074,29 +2091,40 @@ export default function AskDrFleshner() {
                 <p style={{ margin: 0, color: "#506D65", fontSize: 17 }}>Starting your consultation...</p>
               </div>
             )}
-            {displayMessages.map((msg, i) => (
-              <div key={i}>
-                <div style={{ ...styles.messageBubbleRow, justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
-                  {msg.role === "assistant" && <img src={DR_AVATAR} alt="" style={styles.msgAvatar} />}
-                  <div style={{ ...(msg.role === "user" ? styles.userBubble : styles.assistantBubble), maxWidth: isMobile ? "90%" : "75%" }}>
-                    <div style={styles.bubbleText} dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.text) }} />
+            {displayMessages.map((msg, i) => {
+              // Skip rendering component-submitted messages as regular bubbles —
+              // they're shown as SelectedChip below the component instead
+              if (msg.role === "user" && msg.isComponentSubmission) return null;
+
+              return (
+                <div key={i}>
+                  <div style={{ ...styles.messageBubbleRow, justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
+                    {msg.role === "assistant" && <img src={DR_AVATAR} alt="" style={styles.msgAvatar} />}
+                    <div style={{ ...(msg.role === "user" ? styles.userBubble : styles.assistantBubble), maxWidth: isMobile ? "90%" : "75%" }}>
+                      <div style={styles.bubbleText} dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.text) }} />
+                    </div>
                   </div>
+                  {msg.role === "assistant" && msg.component && detectedCondition === "ed" && (
+                    <>
+                      <div style={{
+                        marginLeft: 40,
+                        marginBottom: 6,
+                        maxWidth: isMobile ? "90%" : "85%",
+                        opacity: componentStates[i]?.submitted ? 0 : 1,
+                        maxHeight: componentStates[i]?.submitted ? 0 : 2000,
+                        transition: "opacity 0.3s ease, max-height 0.3s ease",
+                        overflow: "hidden",
+                      }}>
+                        {renderUIComponent(msg.component, i)}
+                      </div>
+                      {componentStates[i]?.submitted && (
+                        <SelectedChip text={componentStates[i].selected} />
+                      )}
+                    </>
+                  )}
                 </div>
-                {msg.role === "assistant" && msg.component && detectedCondition === "ed" && (
-                  <div style={{
-                    marginLeft: 40,
-                    marginBottom: 14,
-                    maxWidth: isMobile ? "90%" : "75%",
-                    opacity: componentStates[i]?.submitted ? 0 : 1,
-                    maxHeight: componentStates[i]?.submitted ? 0 : 2000,
-                    transition: "opacity 0.3s ease, max-height 0.3s ease",
-                    overflow: "hidden",
-                  }}>
-                    {renderUIComponent(msg.component, i)}
-                  </div>
-                )}
-              </div>
-            ))}
+              );
+            })}
             {isLoading && (
               <div style={{ ...styles.messageBubbleRow, justifyContent: "flex-start" }}>
                 <img src={DR_AVATAR} alt="" style={styles.msgAvatar} />
