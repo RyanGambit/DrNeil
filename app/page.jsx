@@ -419,40 +419,77 @@ function getStackedSection(messageText) {
   return null;
 }
 
+// Confirm field regex — matches "Age: 58", "**Age:** 58", "**Age**: 58", etc.
+const CONFIRM_FIELD_RE = /^\*{0,2}([A-Za-z][A-Za-z\s]*?)\*{0,2}:\*{0,2}\s*(.+)$/;
+
 function parseConfirmFields(messageText) {
   const lines = messageText.split("\n");
   const fields = [];
   for (const line of lines) {
-    // Handle both plain "Age: 58" and markdown "**Age:** 58" formats
-    const match = line.match(/^\*{0,2}([A-Z][a-zA-Z\s]+?)\*{0,2}:\*{0,2}\s*(.+)$/);
-    if (match) fields.push({ label: match[1].trim(), value: match[2].trim() });
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const match = trimmed.match(CONFIRM_FIELD_RE);
+    if (match) {
+      const label = match[1].trim();
+      const value = match[2].trim();
+      // Only accept known medical field labels to avoid false matches
+      const knownLabels = ["age", "allergies", "medications", "medical history", "surgeries", "surgery", "medical hx"];
+      if (knownLabels.some(k => label.toLowerCase().includes(k))) {
+        fields.push({ label, value });
+      }
+    }
   }
   return fields;
 }
 
-function parseYesNoQuestions(messageText) {
-  const lines = messageText.split("\n");
-  const questions = [];
-  for (const line of lines) {
-    const match = line.match(/^\d+\.\s*(.+)/);
-    if (match) questions.push(match[1].trim());
-  }
-  return questions;
+// CV screen questions — always the same 3
+const CV_QUESTIONS = [
+  "Can you walk up two flights of stairs without chest pain or severe shortness of breath?",
+  "Have you had a heart attack, stroke, or any heart procedure in the past 6 months?",
+  "Is your blood pressure well controlled right now?",
+];
+
+// Safety gate questions — always the same 4
+const SAFETY_GATE_QUESTIONS = [
+  "You don't take any nitroglycerin, heart spray, or nitrate medication?",
+  "Stairs are still fine — no chest pain or shortness of breath?",
+  "Are you taking tamsulosin or any pill for prostate or urinary symptoms?",
+  "Ever had an erection that wouldn't go down for hours, or sickle cell disease?",
+];
+
+function getYesNoQuestions(messageText) {
+  const lower = messageText.toLowerCase();
+  if (lower.includes("safety questions before we talk about treatment")) return CV_QUESTIONS;
+  if (lower.includes("four final checks") || lower.includes("final checks before")) return SAFETY_GATE_QUESTIONS;
+  return [];
 }
 
 function getDisplayText(msg, condition) {
   if (msg.role !== "assistant" || condition !== "ed") return msg.text;
   const stackedType = getStackedSection(msg.text);
   if (stackedType === "confirm") {
-    return msg.text.split("\n").filter(line => !line.match(/^\*{0,2}[A-Z][a-zA-Z\s]+?\*{0,2}:\*{0,2}\s*.+$/)).join("\n");
+    // Strip field lines (Age: 58, **Allergies:** None, etc.) from bubble
+    return msg.text.split("\n").filter(line => {
+      const trimmed = line.trim();
+      if (!trimmed) return true;
+      const match = trimmed.match(CONFIRM_FIELD_RE);
+      if (!match) return true;
+      const label = match[1].trim().toLowerCase();
+      const knownLabels = ["age", "allergies", "medications", "medical history", "surgeries", "surgery", "medical hx"];
+      return !knownLabels.some(k => label.includes(k));
+    }).join("\n");
   }
   if (stackedType === "yesno") {
-    return msg.text.split("\n").filter(line => !line.match(/^\d+\.\s*.+/)).join("\n");
+    // For yes/no panels, strip everything after the intro line
+    const lines = msg.text.split("\n");
+    const introEnd = lines.findIndex(l => l.toLowerCase().includes("safety questions") || l.toLowerCase().includes("final checks"));
+    if (introEnd >= 0) return lines.slice(0, introEnd + 1).join("\n");
+    return msg.text;
   }
   // Strip SHIM a-e option lines when scored chips are rendering
   const chipResult = getChipsForMessage(msg.text, condition);
   if (chipResult?.layout === "scored") {
-    return msg.text.split("\n").filter(line => !line.match(/^[a-e]\)\s+/)).join("\n");
+    return msg.text.split("\n").filter(line => !line.trim().match(/^[a-e]\)\s+/)).join("\n");
   }
   return msg.text;
 }
@@ -643,7 +680,7 @@ export default function AskDrFleshner() {
     const handleSubmit = () => {
       if (!allAnswered) return;
       const lines = questions.map((q, i) =>
-        `${q.question} → ${answers[i] === "yes" ? "Yes" : "No"}`
+        `${q} → ${answers[i] === "yes" ? "Yes" : "No"}`
       );
       handlePanelSubmit(messageIndex, lines.join(" | "));
     };
@@ -676,7 +713,7 @@ export default function AskDrFleshner() {
             <div style={{
               flex: 1, fontSize: T.fontSize, color: T.text,
               lineHeight: T.lineHeight,
-            }}>{q.question}</div>
+            }}>{q}</div>
             <div style={{ display: "flex", gap: 6, flexShrink: 0, marginTop: 2 }}>
               <button onClick={() => setAnswers((p) => ({ ...p, [i]: "yes" }))} style={{
                 padding: "7px 18px", borderRadius: 8, fontSize: T.fontSmall,
@@ -2188,7 +2225,7 @@ export default function AskDrFleshner() {
                         {stackedType === "confirm" ? (
                           <ConfirmPanel fields={parseConfirmFields(msg.text)} messageIndex={i} />
                         ) : stackedType === "yesno" ? (
-                          <YesNoPanel questions={parseYesNoQuestions(msg.text)} messageIndex={i} />
+                          <YesNoPanel questions={getYesNoQuestions(msg.text)} messageIndex={i} />
                         ) : chipResult ? (
                           <ResponseCard chips={chipResult.chips} scored={chipResult.layout === "scored"} messageIndex={i} />
                         ) : null}
