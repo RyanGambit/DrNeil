@@ -270,21 +270,46 @@ function renderMarkdown(text) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// COMPONENT TAG PARSER — Extracts [COMPONENT:type|opt1|opt2|...] from AI messages
+// TAG PARSER — Extracts [CONFIRM:], [YESNO:], [CHIPS:] tags from AI messages
 // ═══════════════════════════════════════════════════════════════════════
-function parseComponentTag(text) {
-  if (!text) return { cleanText: text, component: null };
-  // Match tags with options: [COMPONENT:type|opt1|opt2] AND without: [COMPONENT:type]
-  const regex = /\[COMPONENT:(\w+)(?:\|([^\]]*))?\]\s*$/;
-  const match = text.match(regex);
-  if (!match) return { cleanText: text, component: null };
-  return {
-    cleanText: text.replace(regex, "").trimEnd(),
-    component: {
-      type: match[1],
-      options: match[2] ? match[2].split("|").map(o => o.trim()).filter(Boolean) : [],
-    },
-  };
+function parseUITags(text) {
+  if (!text) return { cleanText: text, uiBlocks: [] };
+
+  const uiBlocks = [];
+  let cleanText = text;
+
+  // Parse [CONFIRM:label|value] tags
+  const confirmRegex = /\[CONFIRM:([^|]+)\|([^\]]+)\]/g;
+  let match;
+  const confirms = [];
+  while ((match = confirmRegex.exec(text)) !== null) {
+    confirms.push({ label: match[1].trim(), value: match[2].trim() });
+  }
+  if (confirms.length > 0) {
+    uiBlocks.push({ type: "confirm", fields: confirms });
+    cleanText = cleanText.replace(/\[CONFIRM:[^\]]+\]\n?/g, "").trimEnd();
+  }
+
+  // Parse [YESNO:question] tags
+  const yesnoRegex = /\[YESNO:([^\]]+)\]/g;
+  const yesnos = [];
+  while ((match = yesnoRegex.exec(text)) !== null) {
+    yesnos.push({ question: match[1].trim() });
+  }
+  if (yesnos.length > 0) {
+    uiBlocks.push({ type: "yesno", questions: yesnos });
+    cleanText = cleanText.replace(/\[YESNO:[^\]]+\]\n?/g, "").trimEnd();
+  }
+
+  // Parse [CHIPS:opt1|opt2|opt3] tag
+  const chipsRegex = /\[CHIPS:([^\]]+)\]/;
+  const chipsMatch = text.match(chipsRegex);
+  if (chipsMatch) {
+    uiBlocks.push({ type: "chips", options: chipsMatch[1].split("|").map(o => o.trim()) });
+    cleanText = cleanText.replace(/\[CHIPS:[^\]]+\]\n?/g, "").trimEnd();
+  }
+
+  return { cleanText, uiBlocks };
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -317,9 +342,8 @@ export default function AskDrFleshner() {
   const [storageReady, setStorageReady] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const recognitionRef = useRef(null);
-  // ── UI Component State (ED only) ──
-  const [shimScores, setShimScores] = useState([]);
-  const [componentStates, setComponentStates] = useState({});
+  // ── UI Panel State (ED only) ──
+  const [panelStates, setPanelStates] = useState({}); // { [msgIndex]: { submitted, responses } }
   const [conversationId] = useState(() => `consult-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   const chatEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -336,39 +360,35 @@ export default function AskDrFleshner() {
   }, []);
 
   // ═══════════════════════════════════════════════════════════════════════
-  // UI COMPONENT SYSTEM — ED Only
+  // UI PANEL SYSTEM — ED Only (3 components: CONFIRM, YESNO, CHIPS)
   // ═══════════════════════════════════════════════════════════════════════
 
-  const COMP = {
+  const UI = {
     accent: "#1a6b4e",
     accentLight: "#e8f5ef",
     white: "#ffffff",
     border: "#e2e8f0",
-    unselectedBorder: "#cbd5e0",
-    unselectedText: "#4a5568",
     muted: "#8892a4",
     text: "#1a1a2e",
+    danger: "#dc2626",
+    dangerLight: "#fef2f2",
   };
 
-  const handleComponentSelect = (messageIndex, selectedText, shimScore = null) => {
-    setComponentStates((prev) => ({
+  const handlePanelSubmit = (messageIndex, responseText) => {
+    setPanelStates((prev) => ({
       ...prev,
-      [messageIndex]: { ...prev[messageIndex], submitted: true, selected: selectedText },
+      [messageIndex]: { submitted: true, response: responseText },
     }));
-    if (shimScore !== null) {
-      setShimScores((prev) => [...prev, shimScore]);
-    }
     setTimeout(() => {
-      // Mark this message as component-submitted so it renders as a chip, not a regular bubble
-      sendToAPI(messages, selectedText, true, true);
-    }, 350);
+      sendToAPI(messages, responseText, true, true);
+    }, 300);
   };
 
-  // Selected chip — matches reference design: green pill with checkmark, right-aligned
-  const SelectedChip = ({ text }) => (
-    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 6 }}>
+  // Submitted chip — green pill with checkmark, right-aligned
+  const SubmittedChip = ({ text }) => (
+    <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
       <span style={{
-        background: COMP.accent, color: "#fff", padding: "7px 14px",
+        background: UI.accent, color: "#fff", padding: "7px 14px",
         borderRadius: 20, fontSize: 13, fontWeight: 500,
         display: "inline-flex", alignItems: "center", gap: 6,
       }}>
@@ -380,356 +400,211 @@ export default function AskDrFleshner() {
     </div>
   );
 
-  function ChecklistComponent({ options, messageIndex }) {
-    const state = componentStates[messageIndex];
-    const [checked, setChecked] = useState([]);
-    const isSubmitted = state?.submitted;
-    const noneIndex = options.findIndex((o) => /none/i.test(o));
+  // ── COMPONENT 1: ConfirmPanel (intake confirmations) ──
+  function ConfirmPanel({ fields, messageIndex }) {
+    const state = panelStates[messageIndex];
+    const [responses, setResponses] = useState(() =>
+      fields.reduce((acc, f, i) => ({ ...acc, [i]: "correct" }), {})
+    );
+    if (state?.submitted) return null;
 
     const toggle = (idx) => {
-      if (isSubmitted) return;
-      if (idx === noneIndex) {
-        setChecked(checked.includes(idx) ? [] : [idx]);
-      } else {
-        const without = checked.filter((i) => i !== noneIndex);
-        setChecked(
-          without.includes(idx) ? without.filter((i) => i !== idx) : [...without, idx]
-        );
-      }
+      setResponses((prev) => ({
+        ...prev,
+        [idx]: prev[idx] === "correct" ? "flagged" : "correct",
+      }));
     };
 
     const handleSubmit = () => {
-      if (checked.length === 0 || isSubmitted) return;
-      const selected = checked.map((i) => options[i]).join(", ");
-      handleComponentSelect(messageIndex, selected);
+      const flagged = fields.filter((_, i) => responses[i] === "flagged");
+      const confirmed = fields.filter((_, i) => responses[i] === "correct");
+      let text = confirmed.map((f) => `${f.label}: ${f.value} ✓`).join(", ");
+      if (flagged.length > 0) {
+        text += (text ? ". " : "") + "FLAGGED: " + flagged.map((f) => f.label).join(", ");
+      }
+      handlePanelSubmit(messageIndex, text);
     };
 
     return (
-      <div style={{ background: COMP.white, border: `1px solid ${COMP.border}`, borderRadius: 12, padding: 12 }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: COMP.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>
-          Tap all that apply
+      <div style={{
+        background: UI.white, border: `1px solid ${UI.border}`, borderRadius: 12,
+        padding: 14, marginLeft: 40, marginBottom: 8, maxWidth: isMobile ? "90%" : "85%",
+      }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: UI.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>
+          Confirm your details
         </div>
-        {options.map((item, i) => {
-          const isSel = checked.includes(i);
+        {fields.map((field, i) => {
+          const isFlagged = responses[i] === "flagged";
           return (
-            <div
-              key={i}
-              onClick={() => toggle(i)}
-              style={{
-                display: "flex", alignItems: "center", gap: 10,
-                padding: "8px 10px", borderRadius: 8, marginBottom: 4,
-                background: isSel ? COMP.accentLight : "transparent",
-                cursor: isSubmitted ? "default" : "pointer",
-                opacity: isSubmitted && !isSel ? 0.5 : 1,
-              }}
-            >
-              <div style={{
-                width: 20, height: 20, borderRadius: 4, flexShrink: 0,
-                border: `2px solid ${isSel ? COMP.accent : COMP.border}`,
-                background: isSel ? COMP.accent : COMP.white,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                minWidth: 20, minHeight: 20,
-              }}>
-                {isSel && (
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <path d="M2.5 6L5 8.5L9.5 3.5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                )}
+            <div key={i} style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "10px 12px", borderRadius: 8, marginBottom: 4,
+              background: isFlagged ? UI.dangerLight : "transparent",
+              border: `1px solid ${isFlagged ? UI.danger : "transparent"}`,
+            }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: UI.muted, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                  {field.label}
+                </div>
+                <div style={{ fontSize: 14, color: UI.text, marginTop: 2 }}>
+                  {field.value}
+                </div>
               </div>
-              <span style={{ fontSize: 14, color: COMP.text }}>{item}</span>
+              <div style={{ display: "flex", gap: 6, flexShrink: 0, marginLeft: 12 }}>
+                <button onClick={() => !isFlagged && toggle(i)} style={{
+                  padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+                  border: `1.5px solid ${!isFlagged ? UI.accent : UI.border}`,
+                  background: !isFlagged ? UI.accentLight : UI.white,
+                  color: !isFlagged ? UI.accent : UI.muted,
+                  cursor: "pointer", minHeight: 32,
+                }}>Correct</button>
+                <button onClick={() => isFlagged || toggle(i)} style={{
+                  padding: "6px 12px", borderRadius: 8, fontSize: 12, fontWeight: 600,
+                  border: `1.5px solid ${isFlagged ? UI.danger : UI.border}`,
+                  background: isFlagged ? UI.dangerLight : UI.white,
+                  color: isFlagged ? UI.danger : UI.muted,
+                  cursor: "pointer", minHeight: 32,
+                }}>Flag</button>
+              </div>
             </div>
           );
         })}
-        {!isSubmitted && (
-          <button
-            onClick={handleSubmit}
-            style={{
-              width: "100%", marginTop: 8, padding: "11px 16px", borderRadius: 10,
-              background: checked.length > 0 ? COMP.accent : COMP.border,
-              color: checked.length > 0 ? "#fff" : COMP.muted,
-              border: "none", fontSize: 14, fontWeight: 600, cursor: checked.length > 0 ? "pointer" : "default",
-            }}
-          >
-            Done
-          </button>
-        )}
+        <button onClick={handleSubmit} style={{
+          width: "100%", marginTop: 10, padding: "12px 16px", borderRadius: 10,
+          background: UI.accent, color: "#fff", border: "none",
+          fontSize: 14, fontWeight: 600, cursor: "pointer",
+        }}>Submit</button>
       </div>
     );
   }
 
-  function OpenTextComponent({ options, messageIndex }) {
-    const state = componentStates[messageIndex];
-    const [textValue, setTextValue] = useState("");
-    const isSubmitted = state?.submitted;
+  // ── COMPONENT 2: YesNoPanel (CV screen + safety gate) ──
+  function YesNoPanel({ questions, messageIndex }) {
+    const state = panelStates[messageIndex];
+    const [responses, setResponses] = useState(() =>
+      questions.reduce((acc, _, i) => ({ ...acc, [i]: null }), {})
+    );
+    if (state?.submitted) return null;
+
+    const allAnswered = Object.values(responses).every((v) => v !== null);
 
     const handleSubmit = () => {
-      if (!textValue.trim() || isSubmitted) return;
-      handleComponentSelect(messageIndex, textValue.trim());
+      if (!allAnswered) return;
+      const lines = questions.map((q, i) =>
+        `${q.question} → ${responses[i] === "yes" ? "Yes" : "No"}`
+      );
+      handlePanelSubmit(messageIndex, lines.join(" | "));
     };
 
     return (
-      <div>
-        <div style={{
-          background: COMP.white, border: `1px solid ${COMP.border}`, borderRadius: 12,
-          padding: 12, marginBottom: 6,
-        }}>
-          <textarea
+      <div style={{
+        background: UI.white, border: `1px solid ${UI.border}`, borderRadius: 12,
+        padding: 14, marginLeft: 40, marginBottom: 8, maxWidth: isMobile ? "90%" : "85%",
+      }}>
+        {questions.map((q, i) => (
+          <div key={i} style={{
+            padding: "12px 0", borderBottom: i < questions.length - 1 ? `1px solid ${UI.border}` : "none",
+          }}>
+            <div style={{ fontSize: 14, color: UI.text, lineHeight: 1.5, marginBottom: 8 }}>
+              {q.question}
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => setResponses((p) => ({ ...p, [i]: "yes" }))} style={{
+                flex: 1, padding: "10px 8px", borderRadius: 10, fontSize: 13, fontWeight: 600,
+                border: `1.5px solid ${responses[i] === "yes" ? UI.accent : UI.border}`,
+                background: responses[i] === "yes" ? UI.accentLight : UI.white,
+                color: responses[i] === "yes" ? UI.accent : UI.muted,
+                cursor: "pointer", minHeight: 44,
+              }}>Yes</button>
+              <button onClick={() => setResponses((p) => ({ ...p, [i]: "no" }))} style={{
+                flex: 1, padding: "10px 8px", borderRadius: 10, fontSize: 13, fontWeight: 600,
+                border: `1.5px solid ${responses[i] === "no" ? UI.danger : UI.border}`,
+                background: responses[i] === "no" ? UI.dangerLight : UI.white,
+                color: responses[i] === "no" ? UI.danger : UI.muted,
+                cursor: "pointer", minHeight: 44,
+              }}>No</button>
+            </div>
+          </div>
+        ))}
+        <button onClick={handleSubmit} disabled={!allAnswered} style={{
+          width: "100%", marginTop: 10, padding: "12px 16px", borderRadius: 10,
+          background: allAnswered ? UI.accent : UI.border, color: allAnswered ? "#fff" : UI.muted,
+          border: "none", fontSize: 14, fontWeight: 600,
+          cursor: allAnswered ? "pointer" : "default",
+        }}>Submit</button>
+      </div>
+    );
+  }
+
+  // ── COMPONENT 3: ChipsInput (suggestion chips + text field) ──
+  function ChipsInput({ options, messageIndex }) {
+    const state = panelStates[messageIndex];
+    const [textValue, setTextValue] = useState("");
+    if (state?.submitted) return null;
+
+    const handleChipTap = (chip) => {
+      handlePanelSubmit(messageIndex, chip);
+    };
+
+    const handleTextSend = () => {
+      if (!textValue.trim()) return;
+      handlePanelSubmit(messageIndex, textValue.trim());
+    };
+
+    return (
+      <div style={{ marginLeft: 40, marginBottom: 8, maxWidth: isMobile ? "90%" : "85%" }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+          {options.map((chip, i) => (
+            <button key={i} onClick={() => handleChipTap(chip)} style={{
+              padding: "9px 16px", borderRadius: 20, fontSize: 13, fontWeight: 500,
+              border: `1.5px solid ${UI.border}`, background: UI.white, color: UI.text,
+              cursor: "pointer", minHeight: 38,
+              transition: "border-color 0.15s, background 0.15s",
+            }}
+            onMouseEnter={(e) => { e.target.style.borderColor = UI.accent; e.target.style.background = UI.accentLight; }}
+            onMouseLeave={(e) => { e.target.style.borderColor = UI.border; e.target.style.background = UI.white; }}
+            >{chip}</button>
+          ))}
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <input
+            type="text"
             value={textValue}
             onChange={(e) => setTextValue(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSubmit(); } }}
-            placeholder="Type your answer..."
-            disabled={isSubmitted}
+            onKeyDown={(e) => { if (e.key === "Enter") handleTextSend(); }}
+            placeholder="Or type your answer..."
             style={{
-              width: "100%", border: "none", outline: "none", resize: "none",
-              fontSize: 14, lineHeight: 1.5, minHeight: 50, fontFamily: "inherit",
-              color: COMP.text, background: "transparent",
+              flex: 1, padding: "10px 14px", borderRadius: 10,
+              border: `1px solid ${UI.border}`, fontSize: 14,
+              fontFamily: "inherit", color: UI.text, outline: "none",
             }}
           />
+          <button onClick={handleTextSend} style={{
+            padding: "10px 18px", borderRadius: 10,
+            background: textValue.trim() ? UI.accent : UI.border,
+            color: textValue.trim() ? "#fff" : UI.muted,
+            border: "none", fontSize: 14, fontWeight: 600,
+            cursor: textValue.trim() ? "pointer" : "default",
+          }}>Send</button>
         </div>
-        {!isSubmitted && options && options.length > 0 && (
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
-            {options.map((chip, i) => (
-              <span
-                key={i}
-                onClick={() => setTextValue(chip)}
-                style={{
-                  padding: "7px 14px", borderRadius: 16, fontSize: 12,
-                  border: `1px solid ${COMP.border}`, color: COMP.muted,
-                  background: COMP.white, cursor: "pointer",
-                }}
-              >
-                {chip}
-              </span>
-            ))}
-          </div>
-        )}
-        {!isSubmitted && (
-          <button
-            onClick={handleSubmit}
-            style={{
-              width: "100%", padding: "11px 16px", borderRadius: 10,
-              background: textValue.trim() ? COMP.accent : COMP.border,
-              color: textValue.trim() ? "#fff" : COMP.muted,
-              border: "none", fontSize: 14, fontWeight: 600,
-              cursor: textValue.trim() ? "pointer" : "default",
-            }}
-          >
-            Send
-          </button>
-        )}
       </div>
     );
   }
 
-  function YesNoComponent({ options, messageIndex }) {
-    const state = componentStates[messageIndex];
-    const isSubmitted = state?.submitted;
-    const [extraText, setExtraText] = useState("");
-
-    const handleSelect = (label) => {
-      if (isSubmitted) return;
-      const finalText = extraText.trim() ? `${label} — ${extraText.trim()}` : label;
-      handleComponentSelect(messageIndex, finalText);
-    };
-
-    return (
-      <div>
-        <div style={{ display: "flex", gap: 8, marginBottom: 6 }}>
-          {options.map((label, i) => {
-            const isSel = state?.selected?.startsWith(label);
-            return (
-              <button
-                key={i}
-                onClick={() => handleSelect(label)}
-                disabled={isSubmitted}
-                style={{
-                  flex: 1, padding: "12px 8px", borderRadius: 10, fontSize: 14,
-                  fontWeight: 600, border: `1.5px solid ${isSel ? COMP.accent : COMP.border}`,
-                  background: isSel ? COMP.accentLight : COMP.white,
-                  color: isSel ? COMP.accent : COMP.unselectedText,
-                  cursor: isSubmitted ? "default" : "pointer",
-                  opacity: isSubmitted && !isSel ? 0.5 : 1,
-                  minHeight: 44,
-                }}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
-        {!isSubmitted && (
-          <textarea
-            value={extraText}
-            onChange={(e) => setExtraText(e.target.value)}
-            placeholder="Want to add anything? (optional)"
-            style={{
-              width: "100%", padding: "8px 12px", borderRadius: 10,
-              border: `1px solid ${COMP.border}`, fontSize: 13,
-              fontFamily: "inherit", resize: "none", minHeight: 0,
-              color: COMP.text, outline: "none", lineHeight: 1.4,
-            }}
-            rows={1}
-          />
-        )}
-      </div>
-    );
-  }
-
-  const renderUIComponent = (component, messageIndex) => {
-    const state = componentStates[messageIndex];
-    const isSubmitted = state?.submitted;
-
-    // Default options when AI omits them
-    const DEFAULT_OPTIONS = {
-      confirm_buttons: ["Yes", "No"],
-      yes_no: ["Yes", "No"],
-    };
-    const opts = component.options.length > 0
-      ? component.options
-      : (DEFAULT_OPTIONS[component.type] || ["Yes", "No"]);
-
-    // Use opts instead of component.options in renderers
-    const renderOpts = opts;
-
-    switch (component.type) {
-      case "confirm_buttons":
-        return (
-          <div style={{ display: "flex", gap: 8 }}>
-            {renderOpts.map((label, i) => {
-              const isSel = state?.selected === label;
-              return (
-                <button
-                  key={i}
-                  onClick={() => !isSubmitted && handleComponentSelect(messageIndex, label)}
-                  disabled={isSubmitted}
-                  style={{
-                    flex: 1, padding: "12px 8px", borderRadius: 10, fontSize: 14,
-                    fontWeight: 600, border: `1.5px solid ${isSel ? COMP.accent : COMP.border}`,
-                    background: isSel ? COMP.accentLight : COMP.white,
-                    color: isSel ? COMP.accent : COMP.unselectedText,
-                    cursor: isSubmitted ? "default" : "pointer",
-                    opacity: isSubmitted && !isSel ? 0.5 : 1,
-                    minHeight: 44,
-                  }}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-        );
-
-      case "yes_no":
-        return <YesNoComponent options={renderOpts} messageIndex={messageIndex} />;
-
-      case "multi_option":
-      case "range_select":
-        return (
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {renderOpts.map((label, i) => {
-              const isSel = state?.selected === label;
-              return (
-                <button
-                  key={i}
-                  onClick={() => !isSubmitted && handleComponentSelect(messageIndex, label)}
-                  disabled={isSubmitted}
-                  style={{
-                    padding: "10px 16px", borderRadius: 20, fontSize: 13,
-                    fontWeight: 500, border: `1.5px solid ${isSel ? COMP.accent : COMP.unselectedBorder}`,
-                    background: isSel ? COMP.accentLight : COMP.white,
-                    color: isSel ? COMP.accent : COMP.unselectedText,
-                    cursor: isSubmitted ? "default" : "pointer",
-                    opacity: isSubmitted && !isSel ? 0.5 : 1,
-                    minHeight: 44,
-                  }}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-        );
-
-      case "scored_choice":
-        return (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {renderOpts.map((opt, i) => {
-              const letter = String.fromCharCode(97 + i);
-              const score = i + 1;
-              // Strip leading "a) " etc. from the label if AI included it
-              const cleanLabel = opt.replace(/^[a-e]\)\s*/i, "");
-              const isSel = state?.selected === cleanLabel;
-              return (
-                <button
-                  key={i}
-                  onClick={() => !isSubmitted && handleComponentSelect(messageIndex, cleanLabel, score)}
-                  disabled={isSubmitted}
-                  style={{
-                    padding: "10px 14px", borderRadius: 10, fontSize: 14,
-                    border: `1.5px solid ${isSel ? COMP.accent : COMP.border}`,
-                    background: isSel ? COMP.accentLight : COMP.white,
-                    color: isSel ? COMP.accent : COMP.unselectedText,
-                    cursor: isSubmitted ? "default" : "pointer",
-                    textAlign: "left",
-                    display: "flex", alignItems: "center", gap: 10,
-                    fontWeight: isSel ? 600 : 400,
-                    opacity: isSubmitted && !isSel ? 0.5 : 1,
-                    minHeight: 44,
-                  }}
-                >
-                  <span style={{
-                    width: 26, height: 26, borderRadius: 6, fontSize: 12, fontWeight: 700,
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    background: isSel ? COMP.accent : "#f1f5f9",
-                    color: isSel ? "#fff" : COMP.muted,
-                    flexShrink: 0,
-                  }}>
-                    {letter}
-                  </span>
-                  {cleanLabel}
-                </button>
-              );
-            })}
-          </div>
-        );
-
-      case "either_or_card":
-        return (
-          <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: 8 }}>
-            {renderOpts.map((label, i) => {
-              const isSel = state?.selected === label;
-              return (
-                <button
-                  key={i}
-                  onClick={() => !isSubmitted && handleComponentSelect(messageIndex, label)}
-                  disabled={isSubmitted}
-                  style={{
-                    flex: 1, padding: "14px 16px", borderRadius: 12, fontSize: 13,
-                    lineHeight: 1.5, textAlign: "left",
-                    border: `1.5px solid ${isSel ? COMP.accent : COMP.border}`,
-                    background: isSel ? COMP.accentLight : COMP.white,
-                    color: isSel ? COMP.accent : COMP.unselectedText,
-                    cursor: isSubmitted ? "default" : "pointer",
-                    opacity: isSubmitted && !isSel ? 0.5 : 1,
-                    minHeight: 44, fontWeight: isSel ? 600 : 400,
-                  }}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
-        );
-
-      case "checklist":
-        return <ChecklistComponent options={renderOpts} messageIndex={messageIndex} />;
-
-      case "open_text":
-        return <OpenTextComponent options={renderOpts} messageIndex={messageIndex} />;
-
-      default:
-        return null;
-    }
+  // ── Render UI blocks for a message ──
+  const renderUIBlocks = (uiBlocks, messageIndex) => {
+    return uiBlocks.map((block, bi) => {
+      switch (block.type) {
+        case "confirm":
+          return <ConfirmPanel key={bi} fields={block.fields} messageIndex={messageIndex} />;
+        case "yesno":
+          return <YesNoPanel key={bi} questions={block.questions} messageIndex={messageIndex} />;
+        case "chips":
+          return <ChipsInput key={bi} options={block.options} messageIndex={messageIndex} />;
+        default:
+          return null;
+      }
+    });
   };
 
   // Load saved custom scenarios on mount
@@ -1865,19 +1740,12 @@ export default function AskDrFleshner() {
         .map((b) => b.text)
         .join("\n") || "I'm sorry, I had trouble processing that. Could you try again?";
 
-      // Parse and strip component tag (ED only) before storing
-      const { cleanText: assistantText, component: parsedComponent } = parseComponentTag(assistantRaw);
-
-      // Fallback: if ED consultation and message ends with ? but AI forgot the tag,
-      // auto-assign a default yes_no component so the patient always gets buttons
-      let assistantComponent = parsedComponent;
-      if (!assistantComponent && detectedCondition === "ed" && assistantText.trimEnd().endsWith("?")) {
-        assistantComponent = { type: "yes_no", options: ["Yes", "No"] };
-      }
+      // Parse and strip UI tags (ED only) before storing
+      const { cleanText: assistantText, uiBlocks } = parseUITags(assistantRaw);
 
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", text: assistantText, component: assistantComponent, time: new Date() },
+        { role: "assistant", text: assistantText, uiBlocks: uiBlocks.length > 0 ? uiBlocks : null, time: new Date() },
       ]);
     } catch (err) {
       console.error("API error:", err);
@@ -2092,8 +1960,7 @@ export default function AskDrFleshner() {
               </div>
             )}
             {displayMessages.map((msg, i) => {
-              // Skip rendering component-submitted messages as regular bubbles —
-              // they're shown as SelectedChip below the component instead
+              // Skip panel-submitted messages — shown as SubmittedChip instead
               if (msg.role === "user" && msg.isComponentSubmission) return null;
 
               return (
@@ -2104,21 +1971,11 @@ export default function AskDrFleshner() {
                       <div style={styles.bubbleText} dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.text) }} />
                     </div>
                   </div>
-                  {msg.role === "assistant" && msg.component && detectedCondition === "ed" && (
+                  {msg.role === "assistant" && msg.uiBlocks && detectedCondition === "ed" && (
                     <>
-                      <div style={{
-                        marginLeft: 40,
-                        marginBottom: 6,
-                        maxWidth: isMobile ? "90%" : "85%",
-                        opacity: componentStates[i]?.submitted ? 0 : 1,
-                        maxHeight: componentStates[i]?.submitted ? 0 : 2000,
-                        transition: "opacity 0.3s ease, max-height 0.3s ease",
-                        overflow: "hidden",
-                      }}>
-                        {renderUIComponent(msg.component, i)}
-                      </div>
-                      {componentStates[i]?.submitted && (
-                        <SelectedChip text={componentStates[i].selected} />
+                      {renderUIBlocks(msg.uiBlocks, i)}
+                      {panelStates[i]?.submitted && (
+                        <SubmittedChip text={panelStates[i].response} />
                       )}
                     </>
                   )}
