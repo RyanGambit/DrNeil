@@ -2095,7 +2095,22 @@ export default function AskDrFleshner() {
           <div style={{ ...styles.chatInputArea, padding: isMobile ? "10px 12px 16px" : "12px 16px 20px" }}>
             {/* Patient Progress Bar */}
             {(() => {
-              const phaseMap = {
+              // Progress by registry qid gives granular, monotonic progress
+              // that moves with every answered question — much more accurate
+              // than the coarse /api/analyze phase labels which lag and jump
+              // in big steps. Only ED uses the registry; BPH/MH still use the
+              // analyze phase map.
+
+              const PHASE_LABELS = {
+                1: "Getting started",
+                2: "Background questions",
+                3: "Symptom check-in",
+                4: "Understanding your situation",
+                5: "Safety check",
+                6: "Final checks",
+                7: "Wrapping up",
+              };
+              const analyzePhaseMap = {
                 opening: { pct: 5, label: "Getting started" },
                 intake: { pct: 20, label: "Background questions" },
                 questionnaire: { pct: 45, label: "Symptom assessment" },
@@ -2105,10 +2120,7 @@ export default function AskDrFleshner() {
                 closed: { pct: 100, label: "Consultation complete" },
               };
 
-              // Frontend override: /api/analyze sometimes lags behind and
-              // classifies the end-of-consult as "follow_up" or similar.
-              // If the most recent assistant message shows clear close signals
-              // (scheduling button, sign-off, ER-safety close), force "closed".
+              // Detect terminal close signals in the most recent AI message.
               const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
               const lastText = lastAssistant?.text || "";
               const isTerminal =
@@ -2116,10 +2128,45 @@ export default function AskDrFleshner() {
                 /Take care[,!\s]/i.test(lastText) ||
                 /stop the pill and go to the ER/i.test(lastText);
 
-              const effectivePhase = isTerminal ? "closed" : clinicalState?.phase;
-              const info = phaseMap[effectivePhase] || null;
-              const pct = info?.pct || (messages.length > 0 ? Math.min(messages.length * 3, 15) : 0);
-              const label = info?.label || (messages.length > 0 ? "Getting started" : "");
+              let pct = 0;
+              let label = "";
+
+              if (isTerminal) {
+                pct = 100;
+                label = "Consultation complete";
+              } else if (detectedCondition === "ed") {
+                // Walk backwards to find the most recent assistant message with
+                // a resolvable qid, then map its registry index to a percentage.
+                let registryIdx = -1;
+                let matchedEntry = null;
+                for (let i = messages.length - 1; i >= 0; i--) {
+                  const m = messages[i];
+                  if (m.role !== "assistant") continue;
+                  const entry = resolveEntry(m, messages, i);
+                  if (entry) {
+                    registryIdx = ED_QUESTION_REGISTRY.findIndex((e) => e.id === entry.id);
+                    matchedEntry = entry;
+                    break;
+                  }
+                }
+
+                if (registryIdx >= 0) {
+                  const total = ED_QUESTION_REGISTRY.length;
+                  // Scale: first qid = 3%, last = 98%. 100% reserved for terminal.
+                  pct = Math.round(3 + (registryIdx / (total - 1)) * 95);
+                  label = PHASE_LABELS[matchedEntry.phase] || "In progress";
+                } else {
+                  // No registry match yet — very first message, or opening.
+                  const info = analyzePhaseMap[clinicalState?.phase];
+                  pct = info?.pct || (messages.length > 0 ? Math.min(messages.length * 3, 15) : 0);
+                  label = info?.label || (messages.length > 0 ? "Getting started" : "");
+                }
+              } else {
+                // BPH / MH: use the /api/analyze phase map as before.
+                const info = analyzePhaseMap[clinicalState?.phase];
+                pct = info?.pct || (messages.length > 0 ? Math.min(messages.length * 3, 15) : 0);
+                label = info?.label || (messages.length > 0 ? "Getting started" : "");
+              }
 
               return pct > 0 ? (
                 <div style={{ marginBottom: 10 }}>
