@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import ED_QUESTION_REGISTRY from "../prompts/ed-question-registry";
 
 // Condition detection is handled server-side via /api/detect-condition
 
@@ -271,160 +272,32 @@ function renderMarkdown(text) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════
-// KEYWORD-MATCHED CHIP SYSTEM — No AI tags, frontend does all the work
+// REGISTRY-DRIVEN CHIP SYSTEM — AI appends <!-- qid:X --> markers,
+// frontend looks up chips/layout from ED_QUESTION_REGISTRY
 // ═══════════════════════════════════════════════════════════════════════
-const ED_CHIP_MAP = [
-  // ─── PHASE 1: OPENING ───
-  { match: "chest pain during", chips: ["No, none of those", "Yes — one or more of these"] },
-  { match: "injury to the penis", chips: ["No, none of those", "Yes — one or more of these"] },
-  { match: "ready to get started", chips: ["Yes, let's go", "I have a question first"] },
-  { match: "ready to begin", chips: ["Yes, let's go", "I have a question first"] },
-  { match: "shall we get started", chips: ["Yes, let's go", "I have a question first"] },
 
-  // ─── PHASE 2: INTAKE (Q6-Q10) ───
-  { match: "do you smoke", chips: ["Never", "I used to", "Yes, currently"] },
-  { match: "have you smoked", chips: ["Never", "I used to", "Yes, currently"] },
-  { match: "cigarettes", chips: ["A few cigarettes", "Half a pack", "About a pack", "More than a pack"] },
-  { match: "how much did you smoke", chips: ["A few cigarettes", "Half a pack", "About a pack", "More than a pack"] },
-  { match: "how many years", chips: ["Under 5 years", "5–10 years", "10–20 years", "20+ years"] },
-  { match: "how long did you smoke", chips: ["Under 5 years", "5–10 years", "10–20 years", "20+ years"] },
-  { match: "how long were you smoking", chips: ["Under 5 years", "5–10 years", "10–20 years", "20+ years"] },
-  { match: "how long ago did you quit", chips: ["Less than a year", "1–2 years", "3–5 years", "5–10 years", "10+ years"] },
-  { match: "when did you quit", chips: ["Less than a year", "1–2 years", "3–5 years", "5–10 years", "10+ years"] },
-  { match: "when did you stop", chips: ["Less than a year", "1–2 years", "3–5 years", "5–10 years", "10+ years"] },
-  { match: "alcohol", chips: ["Don't drink", "A few drinks", "Moderate", "Heavy"] },
-  { match: "cannabis", chips: ["No", "Occasionally", "Yes, regularly"] },
-  { match: "marijuana", chips: ["No", "Occasionally", "Yes, regularly"] },
-  { match: "regular exercise", chips: ["Not really", "Some, not regularly", "Yes, most days"] },
-  { match: "how active", chips: ["Not really", "Some, not regularly", "Yes, most days"] },
-  { match: "physically active", chips: ["Not really", "Some, not regularly", "Yes, most days"] },
-  { match: "in a relationship", chips: ["Yes", "No"] },
-  { match: "have a partner", chips: ["Yes", "No"] },
-
-  // ─── PHASE 3: SHIM ───
-  { match: "rate your confidence", chips: ["a) Very low", "b) Low", "c) Moderate", "d) High", "e) Very high"], layout: "scored" },
-  { match: "sexually active", chips: ["Yes", "No"] },
-  { match: "is that because", chips: ["No partner right now", "Avoiding it because of ED", "Interest has dropped off", "Other reason"] },
-  { match: "why is that", chips: ["No partner right now", "Avoiding it because of ED", "Interest has dropped off", "Other reason"] },
-  { match: "hard enough for sex", chips: ["a) Almost never", "b) Less than half the time", "c) About half the time", "d) More than half the time", "e) Almost always"], layout: "scored" },
-  { match: "hard enough to have sex", chips: ["a) Almost never", "b) Less than half the time", "c) About half the time", "d) More than half the time", "e) Almost always"], layout: "scored" },
-  { match: "firm enough", chips: ["a) Almost never", "b) Less than half the time", "c) About half the time", "d) More than half the time", "e) Almost always"], layout: "scored" },
-  { match: "keep your erection after", chips: ["a) Almost never", "b) Less than half the time", "c) About half the time", "d) More than half the time", "e) Almost always"], layout: "scored" },
-  { match: "maintain your erection", chips: ["a) Almost never", "b) Less than half the time", "c) About half the time", "d) More than half the time", "e) Almost always"], layout: "scored" },
-  { match: "keep it up after", chips: ["a) Almost never", "b) Less than half the time", "c) About half the time", "d) More than half the time", "e) Almost always"], layout: "scored" },
-  { match: "all the way to the end", chips: ["a) Extremely hard", "b) Very hard", "c) Hard", "d) A little hard", "e) Not hard at all"], layout: "scored" },
-  { match: "keep your erection to the end", chips: ["a) Extremely hard", "b) Very hard", "c) Hard", "d) A little hard", "e) Not hard at all"], layout: "scored" },
-  { match: "was it satisfying", chips: ["a) Almost never", "b) Less than half the time", "c) About half the time", "d) More than half the time", "e) Almost always"], layout: "scored" },
-  { match: "satisfying for you", chips: ["a) Almost never", "b) Less than half the time", "c) About half the time", "d) More than half the time", "e) Almost always"], layout: "scored" },
-
-  // ─── PHASE 4: CLINICAL HISTORY ───
-  { match: "morning erection", chips: ["Yes, most mornings", "Sometimes / partial", "No, not anymore"] },
-  { match: "wake up with", chips: ["Yes, most mornings", "Sometimes / partial", "No, not anymore"] },
-  { match: "on your own", chips: ["Yes, works fine alone", "Sometimes", "No, same problem alone"] },
-  { match: "by yourself", chips: ["Yes, works fine alone", "Sometimes", "No, same problem alone"] },
-  { match: "masturbat", chips: ["Yes, works fine alone", "Sometimes", "No, same problem alone"] },
-  { match: "happen every time", chips: ["Every time, consistently", "Only in certain situations"] },
-  { match: "certain situations", chips: ["Every time, consistently", "Only in certain situations"] },
-  { match: "gradually", chips: ["Gradually, over time", "More suddenly"] },
-  { match: "come on slow", chips: ["Gradually, over time", "More suddenly"] },
-  { match: "more sudden", chips: ["Gradually, over time", "More suddenly"] },
-  { match: "getting hard", chips: ["Trouble getting hard", "Get hard but lose it"] },
-  { match: "keeping hard", chips: ["Trouble getting hard", "Get hard but lose it"] },
-  { match: "losing it", chips: ["Trouble getting hard", "Get hard but lose it"] },
-  { match: "stress, anxiety", chips: ["Yes, definitely", "Not really"] },
-  { match: "stress or anxiety", chips: ["Yes, definitely", "Not really"] },
-  { match: "relationship tension", chips: ["Yes, definitely", "Not really"] },
-  { match: "pills or treatments", chips: ["Yes", "No, never tried anything"] },
-  { match: "tried any medication", chips: ["Yes", "No, never tried anything"] },
-  { match: "tried anything for", chips: ["Yes", "No, never tried anything"] },
-  { match: "which pill", chips: ["Viagra (sildenafil)", "Cialis (tadalafil)", "Don't remember"] },
-  { match: "what was the name", chips: ["Viagra (sildenafil)", "Cialis (tadalafil)", "Don't remember"] },
-  { match: "do you remember the name", chips: ["Viagra (sildenafil)", "Cialis (tadalafil)", "Don't remember"] },
-  { match: "how many times did you try", chips: ["Once or twice", "3–4 times", "5–6 times", "More than 6"] },
-  { match: "how many times did you use", chips: ["Once or twice", "3–4 times", "5–6 times", "More than 6"] },
-  { match: "how often did you try", chips: ["Once or twice", "3–4 times", "5–6 times", "More than 6"] },
-  { match: "empty stomach", chips: ["Empty / light stomach", "After a big meal", "Don't remember"] },
-  { match: "big meal", chips: ["Empty / light stomach", "After a big meal", "Don't remember"] },
-  { match: "how long before sex", chips: ["Right before", "15–30 min", "30–60 min", "1–2 hours", "Don't remember"] },
-  { match: "how long did you wait", chips: ["Right before", "15–30 min", "30–60 min", "1–2 hours", "Don't remember"] },
-  { match: "how far in advance", chips: ["Right before", "15–30 min", "30–60 min", "1–2 hours", "Don't remember"] },
-  { match: "were you turned on", chips: ["Yes", "No / not sure"] },
-  { match: "sexually stimulated", chips: ["Yes", "No / not sure"] },
-  { match: "aroused", chips: ["Yes", "No / not sure"] },
-  { match: "wasn't working", chips: ["Didn't work at all", "Helped some, not enough", "Side effects", "Other reason"] },
-  { match: "stop taking it", chips: ["Didn't work at all", "Helped some, not enough", "Side effects", "Other reason"] },
-  { match: "give up on it", chips: ["Didn't work at all", "Helped some, not enough", "Side effects", "Other reason"] },
-  { match: "bothers you", chips: ["Affecting my relationship", "Less confident", "Worried something's wrong", "Just want it fixed"] },
-  { match: "what's the hardest part", chips: ["Affecting my relationship", "Less confident", "Worried something's wrong", "Just want it fixed"] },
-
-  // ─── ETIOLOGY CONFLICT PROBES ───
-  { match: "few weeks or", chips: ["A few weeks / months", "Literally overnight / days"] },
-  { match: "literally overnight", chips: ["A few weeks / months", "Literally overnight / days"] },
-  { match: "ring true", chips: ["Yes, that rings true", "No, doesn't feel like anxiety"] },
-  { match: "anxiety or pressure is getting in the way", chips: ["Yes, that rings true", "No, doesn't feel like anxiety"] },
-  { match: "on your own with no pressure", chips: ["Yes, fully on my own", "No, same problem"] },
-  { match: "with zero pressure", chips: ["Yes, fully on my own", "No, same problem"] },
-
-  // ─── CONDITIONAL FOLLOW-UPS ───
-  { match: "interest in sex", chips: ["Interest is still there", "Interest has dropped off"] },
-  { match: "sex drive", chips: ["Interest is still there", "Interest has dropped off"] },
-  { match: "fatigue", chips: ["Yes", "No"] },
-  { match: "low energy", chips: ["Yes", "No"] },
-  { match: "new medication", chips: ["Yes, around that time", "No, unrelated"] },
-  { match: "started a new", chips: ["Yes, around that time", "No, unrelated"] },
-  { match: "bend or curve", chips: ["Yes", "No"] },
-  { match: "curvature", chips: ["Yes", "No"] },
-
-  // ─── PARTNER ───
-  { match: "partner handling", chips: ["They're supportive", "It's causing tension", "We don't talk about it", "They don't know"] },
-  { match: "partner dealing", chips: ["They're supportive", "It's causing tension", "We don't talk about it", "They don't know"] },
-  { match: "partner taking this", chips: ["They're supportive", "It's causing tension", "We don't talk about it", "They don't know"] },
-
-  // ─── OUTCOME DELIVERY ───
-  { match: "which sounds better", chips: ["On-demand — take before sex", "Daily — small pill every day"] },
-  { match: "two ways to take", chips: ["On-demand — take before sex", "Daily — small pill every day"] },
-  { match: "which option", chips: ["On-demand — take before sex", "Daily — small pill every day"] },
-  { match: "sound good so far", chips: ["Sounds good", "I have a question"] },
-  { match: "sound good?", chips: ["Sounds good", "I have a question"] },
-  { match: "any questions about that", chips: ["All good", "I have a question"] },
-  { match: "any questions so far", chips: ["All good", "I have a question"] },
-  { match: "make sense?", chips: ["Makes sense", "I have a question"] },
-  { match: "does that make sense", chips: ["Makes sense", "I have a question"] },
-];
-
-function getChipsForMessage(messageText, condition) {
-  if (condition !== "ed") return null;
-  // CRITICAL: Only match messages that contain a question mark.
-  // This prevents false matches on AI statements/explanations that
-  // happen to contain keywords (e.g. "your morning erections tell me..."
-  // or "you still need to be turned on for it to work").
-  if (!messageText.includes("?")) return null;
-  const lower = messageText.toLowerCase();
-  for (const entry of ED_CHIP_MAP) {
-    if (lower.includes(entry.match.toLowerCase())) {
-      return { chips: entry.chips, layout: entry.layout || "horizontal" };
-    }
-  }
-  return null;
+// Extract the hidden question ID marker from an AI message and return
+// { cleanText, qid }. If no marker is present, qid is null and cleanText
+// equals the original message. The marker regex is tolerant of whitespace
+// and optional trailing newlines.
+const QID_MARKER_RE = /\s*<!--\s*qid:([a-z0-9-]+)\s*-->\s*$/i;
+function parseQID(messageText) {
+  if (!messageText) return { cleanText: messageText, qid: null };
+  const match = messageText.match(QID_MARKER_RE);
+  if (!match) return { cleanText: messageText, qid: null };
+  const qid = match[1];
+  const cleanText = messageText.replace(QID_MARKER_RE, "").trimEnd();
+  return { cleanText, qid };
 }
 
-// Stacked section detection
-const STACKED_SECTIONS = [
-  { match: "here's what i have", type: "confirm" },
-  { match: "just a few safety questions before we talk about treatment", type: "yesno" },
-  { match: "four final checks before we get your prescription", type: "yesno" },
-];
-
-function getStackedSection(messageText) {
-  const lower = messageText.toLowerCase();
-  for (const section of STACKED_SECTIONS) {
-    if (lower.includes(section.match)) return section.type;
-  }
-  return null;
+function getRegistryEntry(qid) {
+  if (!qid) return null;
+  return ED_QUESTION_REGISTRY.find((q) => q.id === qid) || null;
 }
 
 // Confirm field regex — matches "Age: 58", "**Age:** 58", "**Age**: 58", etc.
 const CONFIRM_FIELD_RE = /^\*{0,2}([A-Za-z][A-Za-z\s]*?)\*{0,2}:\*{0,2}\s*(.+)$/;
+const CONFIRM_KNOWN_LABELS = ["age", "allergies", "medications", "medical history", "surgeries", "surgery", "medical hx"];
 
 function parseConfirmFields(messageText) {
   const lines = messageText.split("\n");
@@ -436,9 +309,7 @@ function parseConfirmFields(messageText) {
     if (match) {
       const label = match[1].trim();
       const value = match[2].trim();
-      // Only accept known medical field labels to avoid false matches
-      const knownLabels = ["age", "allergies", "medications", "medical history", "surgeries", "surgery", "medical hx"];
-      if (knownLabels.some(k => label.toLowerCase().includes(k))) {
+      if (CONFIRM_KNOWN_LABELS.some(k => label.toLowerCase().includes(k))) {
         fields.push({ label, value });
       }
     }
@@ -446,55 +317,33 @@ function parseConfirmFields(messageText) {
   return fields;
 }
 
-// CV screen questions — Yes = safe (green), No = flagged (red)
-const CV_QUESTIONS = [
-  "Can you walk up two flights of stairs without chest pain or severe shortness of breath?",
-  "Is your heart in good shape — no heart attacks, strokes, or procedures in the past 6 months?",
-  "Is your blood pressure well controlled right now?",
-];
-
-// Safety gate questions — Yes = safe (green), No = flagged (red)
-const SAFETY_GATE_QUESTIONS = [
-  "Can you confirm you're not on any nitroglycerin, heart spray, or nitrate medication?",
-  "Stairs are still fine — no chest pain or shortness of breath?",
-  "Are you free of any prostate or urinary pills like tamsulosin?",
-  "Is it safe to say you've never had an erection that wouldn't go down for hours, and no sickle cell disease?",
-];
-
-function getYesNoQuestions(messageText) {
-  const lower = messageText.toLowerCase();
-  if (lower.includes("safety questions before we talk about treatment")) return CV_QUESTIONS;
-  if (lower.includes("four final checks") || lower.includes("final checks before")) return SAFETY_GATE_QUESTIONS;
-  return [];
-}
-
+// getDisplayText — strips content from the AI message before display in the
+// chat bubble. Two rules:
+//   1. Confirm panel (intake-confirm): strip "Label: Value" lines that are
+//      rendered inside the ConfirmPanel so they don't show twice.
+//   2. Scored layout (SHIM questions): strip the a) / b) / c) / ... option
+//      lines since the ResponseCard renders them as scored chip cards.
+// All other keyword-based stripping is gone — that logic belonged to the old
+// stacked CV / safety gate panels which no longer exist.
 function getDisplayText(msg, condition) {
   if (msg.role !== "assistant" || condition !== "ed") return msg.text;
-  const stackedType = getStackedSection(msg.text);
-  if (stackedType === "confirm") {
-    // Strip field lines (Age: 58, **Allergies:** None, etc.) from bubble
+  const entry = getRegistryEntry(msg.qid);
+
+  if (entry?.type === "confirm-panel") {
     return msg.text.split("\n").filter(line => {
       const trimmed = line.trim();
       if (!trimmed) return true;
       const match = trimmed.match(CONFIRM_FIELD_RE);
       if (!match) return true;
       const label = match[1].trim().toLowerCase();
-      const knownLabels = ["age", "allergies", "medications", "medical history", "surgeries", "surgery", "medical hx"];
-      return !knownLabels.some(k => label.includes(k));
+      return !CONFIRM_KNOWN_LABELS.some(k => label.includes(k));
     }).join("\n");
   }
-  if (stackedType === "yesno") {
-    // For yes/no panels, strip everything after the intro line
-    const lines = msg.text.split("\n");
-    const introEnd = lines.findIndex(l => l.toLowerCase().includes("safety questions") || l.toLowerCase().includes("final checks"));
-    if (introEnd >= 0) return lines.slice(0, introEnd + 1).join("\n");
-    return msg.text;
-  }
-  // Strip SHIM a-e option lines when scored chips are rendering
-  const chipResult = getChipsForMessage(msg.text, condition);
-  if (chipResult?.layout === "scored") {
+
+  if (entry?.layout === "scored") {
     return msg.text.split("\n").filter(line => !line.trim().match(/^[a-e]\)\s+/)).join("\n");
   }
+
   return msg.text;
 }
 
@@ -665,96 +514,6 @@ export default function AskDrFleshner() {
             </div>
           );
         })}
-        {allAnswered && (
-          <div style={{
-            padding: "12px 18px", borderTop: `1px solid ${T.borderLight}`,
-            display: "flex", justifyContent: "flex-end",
-          }}>
-            <button onClick={handleSubmit} style={{
-              padding: "10px 28px", borderRadius: 10, border: "none",
-              background: T.accent, color: "#fff", fontSize: T.fontSmall,
-              fontWeight: 600, fontFamily: T.font, cursor: "pointer",
-              boxShadow: "0 2px 4px rgba(15,123,108,0.2)",
-            }}>Submit</button>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // ── COMPONENT 2: YesNoPanel (from ED_Desktop_Style_Guide.jsx) ──
-  function YesNoPanel({ questions, messageIndex }) {
-    const state = panelStates[messageIndex];
-    if (state?.submitted) return null;
-
-    // Store answers in panelStates (persists across re-renders)
-    const answers = state?.answers || {};
-    const setAnswer = (idx, value) => {
-      setPanelStates((prev) => ({
-        ...prev,
-        [messageIndex]: { ...prev[messageIndex], answers: { ...(prev[messageIndex]?.answers || {}), [idx]: value } },
-      }));
-    };
-
-    const allAnswered = Object.keys(answers).length === questions.length;
-
-    const handleSubmit = () => {
-      if (!allAnswered) return;
-      const lines = questions.map((q, i) =>
-        `${q} → ${answers[i] === "yes" ? "Yes" : "No"}`
-      );
-      handlePanelSubmit(messageIndex, lines.join(" | "));
-    };
-
-    return (
-      <div style={{
-        marginLeft: T.componentIndent, marginBottom: 4, maxWidth: T.bubbleMax,
-        background: T.panelBg, border: `1.5px solid ${T.panelBorder}`,
-        borderRadius: T.panelRadius, overflow: "hidden", fontFamily: T.font,
-      }}>
-        <div style={{
-          padding: "10px 18px", borderBottom: `1px solid ${T.borderLight}`,
-          display: "flex", alignItems: "center", gap: 8,
-        }}>
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-            <rect x="1.5" y="1.5" width="13" height="13" rx="3" stroke={T.accent} strokeWidth="1.5"/>
-            <path d="M5 8h6M8 5v6" stroke={T.accent} strokeWidth="1.5" strokeLinecap="round"/>
-          </svg>
-          <span style={{
-            fontSize: T.fontTiny, fontWeight: 700, color: T.accent,
-            textTransform: "uppercase", letterSpacing: "1px",
-          }}>Safety checks</span>
-        </div>
-        {questions.map((q, i) => (
-          <div key={i} style={{
-            display: "flex", alignItems: "flex-start", padding: "14px 18px",
-            borderBottom: i < questions.length - 1 ? `1px solid ${T.borderLight}` : "none",
-            gap: 16,
-          }}>
-            <div style={{
-              flex: 1, fontSize: T.fontSize, color: T.text,
-              lineHeight: T.lineHeight,
-            }}>{q}</div>
-            <div style={{ display: "flex", gap: 6, flexShrink: 0, marginTop: 2 }}>
-              <button onClick={() => setAnswer(i, "yes")} style={{
-                padding: "7px 18px", borderRadius: 8, fontSize: T.fontSmall,
-                fontWeight: 600, fontFamily: T.font, cursor: "pointer",
-                border: `1.5px solid ${answers[i] === "yes" ? T.yesGreen : T.noBorder}`,
-                background: answers[i] === "yes" ? T.accentSoft : T.surface,
-                color: answers[i] === "yes" ? T.yesGreen : T.textSecondary,
-                transition: "all 0.15s ease",
-              }}>Yes</button>
-              <button onClick={() => setAnswer(i, "no")} style={{
-                padding: "7px 18px", borderRadius: 8, fontSize: T.fontSmall,
-                fontWeight: 600, fontFamily: T.font, cursor: "pointer",
-                border: `1.5px solid ${answers[i] === "no" ? "#c53030" : T.noBorder}`,
-                background: answers[i] === "no" ? "#fff5f5" : T.surface,
-                color: answers[i] === "no" ? "#c53030" : T.textSecondary,
-                transition: "all 0.15s ease",
-              }}>No</button>
-            </div>
-          </div>
-        ))}
         {allAnswered && (
           <div style={{
             padding: "12px 18px", borderTop: `1px solid ${T.borderLight}`,
@@ -1981,10 +1740,12 @@ export default function AskDrFleshner() {
         .map((b) => b.text)
         .join("\n") || "I'm sorry, I had trouble processing that. Could you try again?";
 
-      // No tag parsing needed — frontend uses keyword matching
+      // Parse the hidden <!-- qid:X --> marker (ED consultations only).
+      // Non-ED conversations won't have markers; qid is null in that case.
+      const { cleanText, qid } = parseQID(assistantRaw);
       setMessages((prev) => [
         ...prev,
-        { role: "assistant", text: assistantRaw, time: new Date() },
+        { role: "assistant", text: cleanText, qid, time: new Date() },
       ]);
     } catch (err) {
       console.error("API error:", err);
@@ -2211,19 +1972,26 @@ export default function AskDrFleshner() {
                     </div>
                   </div>
                   {msg.role === "assistant" && detectedCondition === "ed" && (() => {
-                    const stackedType = getStackedSection(msg.text);
-                    const chipResult = getChipsForMessage(msg.text, detectedCondition);
-                    if (!stackedType && !chipResult) return null;
+                    // Registry-driven: look up the AI-supplied qid marker.
+                    // No qid → no component (e.g. pure acknowledgments, outcome C text).
+                    const entry = getRegistryEntry(msg.qid);
+                    if (!entry) return null;
+
+                    // confirm-panel → intake confirmation (the ONE stacked exception)
+                    if (entry.type === "confirm-panel") {
+                      return <ConfirmPanel fields={parseConfirmFields(msg.text)} messageIndex={i} />;
+                    }
+
+                    // chips: null → open-text question, no ResponseCard rendered
+                    // (patient types in the main chat input at the bottom)
+                    if (!entry.chips) return null;
+
                     return (
-                      <>
-                        {stackedType === "confirm" ? (
-                          <ConfirmPanel fields={parseConfirmFields(msg.text)} messageIndex={i} />
-                        ) : stackedType === "yesno" ? (
-                          <YesNoPanel questions={getYesNoQuestions(msg.text)} messageIndex={i} />
-                        ) : chipResult ? (
-                          <ResponseCard chips={chipResult.chips} scored={chipResult.layout === "scored"} messageIndex={i} />
-                        ) : null}
-                      </>
+                      <ResponseCard
+                        chips={entry.chips}
+                        scored={entry.layout === "scored"}
+                        messageIndex={i}
+                      />
                     );
                   })()}
                 </div>
