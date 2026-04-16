@@ -1329,17 +1329,19 @@ Present all three as ONE stacked message:
 "Just a few safety questions before we talk about treatment:
 
 1. Can you walk up two flights of stairs or walk briskly without getting chest pain or really short of breath?
-2. Have you had a heart attack, stroke, or any heart procedure in the past 6 months?
+2. Is your heart in good shape — no heart attacks, strokes, or procedures in the past 6 months?
 3. Is your blood pressure well controlled right now?
 
 Just yes or no for each."
+
+IMPORTANT: All questions are framed so that YES = safe/clear, NO = flagged.
 
 CLARIFICATION RULE: If the patient answers any CV question ambiguously,
 clarify with a simpler rephrased version before routing.
 
 ROUTING AFTER PATIENT RESPONDS:
 - Q1: No or uncertain → Outcome C
-- Q2: Yes (had event) → Outcome C
+- Q2: No (had event) → Outcome C
 - Q3: No or uncertain → Outcome C
 - If ANY answer is negative → explain which one and why it changes things
 - If all clear → proceed
@@ -1446,22 +1448,24 @@ Present all four checks as ONE stacked message:
 
 "Four final checks before we get your prescription sorted:
 
-1. Just to be absolutely sure — you don't take any nitroglycerin, heart spray, or any nitrate medication?
-2. And the stairs are still fine — no chest pain or severe shortness of breath?
-3. Are you taking tamsulosin or any pill for prostate or urinary symptoms?
-4. Have you ever had an erection that wouldn't go down for hours, or do you have sickle cell disease?
+1. Can you confirm you're not on any nitroglycerin, heart spray, or nitrate medication?
+2. Stairs are still fine — no chest pain or shortness of breath?
+3. Are you free of any prostate or urinary pills like tamsulosin?
+4. Is it safe to say you've never had an erection that wouldn't go down for hours, and no sickle cell disease?
 
 Just yes or no for each."
 
+IMPORTANT: All questions are framed so that YES = safe/clear, NO = flagged.
+
 ROUTING AFTER PATIENT RESPONDS:
 - Q1 (NITRATE RE-CHECK — confirm even if asked before during intake):
-  Patient confirms nitrates → ABSOLUTE STOP. Outcome C.
+  No (takes nitrates) → ABSOLUTE STOP. Outcome C.
 - Q2 (CV FITNESS RE-CHECK — already answered in CV screen, this is confirmation):
-  Uncertain → Outcome C.
+  No or uncertain → Outcome C.
 - Q3 (ALPHA-BLOCKER CHECK):
-  Yes → Can proceed with timing adjustment. Document.
+  No (takes alpha-blocker) → Can proceed with timing adjustment. Document.
 - Q4 (PRIAPISM / SICKLE CELL):
-  Yes → Outcome C.
+  No (has history) → Outcome C.
 - If ANY gate fails → explain which one and why it changes things
 
 IF ALL GATES PASS → OUTCOME B

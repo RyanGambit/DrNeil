@@ -446,19 +446,19 @@ function parseConfirmFields(messageText) {
   return fields;
 }
 
-// CV screen questions — always the same 3
+// CV screen questions — Yes = safe (green), No = flagged (red)
 const CV_QUESTIONS = [
   "Can you walk up two flights of stairs without chest pain or severe shortness of breath?",
-  "Have you had a heart attack, stroke, or any heart procedure in the past 6 months?",
+  "Is your heart in good shape — no heart attacks, strokes, or procedures in the past 6 months?",
   "Is your blood pressure well controlled right now?",
 ];
 
-// Safety gate questions — always the same 4
+// Safety gate questions — Yes = safe (green), No = flagged (red)
 const SAFETY_GATE_QUESTIONS = [
-  "You don't take any nitroglycerin, heart spray, or nitrate medication?",
+  "Can you confirm you're not on any nitroglycerin, heart spray, or nitrate medication?",
   "Stairs are still fine — no chest pain or shortness of breath?",
-  "Are you taking tamsulosin or any pill for prostate or urinary symptoms?",
-  "Ever had an erection that wouldn't go down for hours, or sickle cell disease?",
+  "Are you free of any prostate or urinary pills like tamsulosin?",
+  "Is it safe to say you've never had an erection that wouldn't go down for hours, and no sickle cell disease?",
 ];
 
 function getYesNoQuestions(messageText) {
