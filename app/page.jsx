@@ -2,6 +2,43 @@
 
 import { useState, useRef, useEffect } from "react";
 import ED_QUESTION_REGISTRY from "../prompts/ed-question-registry";
+import BPH_QUESTION_REGISTRY from "../prompts/bph-question-registry";
+
+// Condition-scoped registries. IDs can collide across conditions
+// (both ED and BPH have "opening-safety-screen", for example) but the
+// questions and chips differ, so every lookup MUST pass the condition.
+const REGISTRIES = {
+  ed: ED_QUESTION_REGISTRY,
+  bph: BPH_QUESTION_REGISTRY,
+};
+
+function getRegistry(condition) {
+  return REGISTRIES[condition] || null;
+}
+
+// Phase labels by condition. Phases 1-7 roughly track the consult arc but
+// the clinical content behind each phase differs between conditions (e.g.
+// ED phase 5 = CV screen; BPH phase 5 = outcome determination).
+const PHASE_LABELS_BY_CONDITION = {
+  ed: {
+    1: "Getting started",
+    2: "Background questions",
+    3: "Symptom check-in",
+    4: "Understanding your situation",
+    5: "Safety check",
+    6: "Final checks",
+    7: "Wrapping up",
+  },
+  bph: {
+    1: "Getting started",
+    2: "Background questions",
+    3: "Symptom check-in",
+    4: "Rounding out the picture",
+    5: "Making the plan",
+    6: "Final safety checks",
+    7: "Wrapping up",
+  },
+};
 
 // Condition detection is handled server-side via /api/detect-condition
 
@@ -273,7 +310,8 @@ function renderMarkdown(text) {
 
 // ═══════════════════════════════════════════════════════════════════════
 // REGISTRY-DRIVEN CHIP SYSTEM — AI appends <!-- qid:X --> markers,
-// frontend looks up chips/layout from ED_QUESTION_REGISTRY
+// frontend looks up chips/layout from the active condition's registry
+// (ED_QUESTION_REGISTRY or BPH_QUESTION_REGISTRY).
 // ═══════════════════════════════════════════════════════════════════════
 
 // Extract the hidden question ID marker from an AI message and return
@@ -294,20 +332,25 @@ function parseQID(messageText) {
   return { cleanText, qid };
 }
 
-function getRegistryEntry(qid) {
+function getRegistryEntry(qid, condition) {
   if (!qid) return null;
-  return ED_QUESTION_REGISTRY.find((q) => q.id === qid) || null;
+  const registry = getRegistry(condition);
+  if (!registry) return null;
+  return registry.find((q) => q.id === qid) || null;
 }
 
 // FALLBACK: if the AI forgets the qid marker, try to recover by matching
 // the AI message text against registry question text. Only runs when the
 // marker is missing. Uses the LAST question sentence from each registry
-// entry as the needle, trimmed and lowercased for robustness.
-function detectQidFromText(messageText) {
+// entry as the needle, trimmed and lowercased for robustness. Scoped to
+// the active condition's registry so BPH messages can't match ED entries.
+function detectQidFromText(messageText, condition) {
   if (!messageText) return null;
+  const registry = getRegistry(condition);
+  if (!registry) return null;
   const lower = messageText.toLowerCase();
   // Prefer LONGER needles first — they're more specific
-  const candidates = ED_QUESTION_REGISTRY
+  const candidates = registry
     .filter((e) => e.question)
     .map((e) => {
       // Take the last line ending in "?" from the question text
@@ -329,15 +372,18 @@ function detectQidFromText(messageText) {
 // almost certainly a rephrase — so the previous assistant qid still applies.
 const NON_COMMITTAL_RE = /^(not sure|maybe|i don['']?t know|idk|unsure|don['']?t know|i['']?m not sure|actually,?\s*i['']?m not sure about that)\s*\.?\s*$/i;
 
-function resolveEntry(msg, messages, index) {
+function resolveEntry(msg, messages, index, condition) {
+  // All three layers are scoped to the active condition's registry so
+  // BPH messages can't accidentally match ED entries and vice versa.
+
   // 1. Direct marker lookup (happy path)
-  const direct = getRegistryEntry(msg.qid);
+  const direct = getRegistryEntry(msg.qid, condition);
   if (direct) return direct;
 
   // 2. Text match against registry questions (AI dropped the marker but kept
   //    the verbatim question text)
-  const fallbackQid = detectQidFromText(msg.text);
-  const byText = fallbackQid ? getRegistryEntry(fallbackQid) : null;
+  const fallbackQid = detectQidFromText(msg.text, condition);
+  const byText = fallbackQid ? getRegistryEntry(fallbackQid, condition) : null;
   if (byText) return byText;
 
   // 3. Contextual rephrase fallback — only when we have messages/index.
@@ -360,14 +406,14 @@ function resolveEntry(msg, messages, index) {
       if (m.qid) {
         prevAssistantQid = m.qid;
       } else {
-        prevAssistantQid = detectQidFromText(m.text);
+        prevAssistantQid = detectQidFromText(m.text, condition);
       }
       break;
     }
   }
 
   if (prevAssistantQid && lastUserText && NON_COMMITTAL_RE.test(lastUserText)) {
-    return getRegistryEntry(prevAssistantQid);
+    return getRegistryEntry(prevAssistantQid, condition);
   }
   return null;
 }
@@ -403,8 +449,10 @@ function parseConfirmFields(messageText) {
 // All other keyword-based stripping is gone — that logic belonged to the old
 // stacked CV / safety gate panels which no longer exist.
 function getDisplayText(msg, condition, messages, index) {
-  if (msg.role !== "assistant" || condition !== "ed") return msg.text;
-  const entry = resolveEntry(msg, messages, index);
+  if (msg.role !== "assistant") return msg.text;
+  // Only ED and BPH have registry-driven stripping; other conditions pass through.
+  if (condition !== "ed" && condition !== "bph") return msg.text;
+  const entry = resolveEntry(msg, messages, index, condition);
 
   if (entry?.type === "confirm-panel") {
     return msg.text.split("\n").filter(line => {
@@ -2048,12 +2096,14 @@ export default function AskDrFleshner() {
                       <div style={styles.bubbleText} dangerouslySetInnerHTML={{ __html: renderMarkdown(getDisplayText(msg, detectedCondition, displayMessages, i)) }} />
                     </div>
                   </div>
-                  {msg.role === "assistant" && detectedCondition === "ed" && (() => {
+                  {msg.role === "assistant" && (detectedCondition === "ed" || detectedCondition === "bph") && (() => {
                     // Registry-driven: look up the AI-supplied qid marker.
                     // Three fallback layers: (1) direct marker, (2) text match
                     // against registry question, (3) contextual — if patient's
                     // last reply was non-committal, reuse previous qid (rephrase).
-                    const entry = resolveEntry(msg, displayMessages, i);
+                    // All layers are scoped by condition so ED and BPH don't
+                    // cross-contaminate despite sharing some qid values.
+                    const entry = resolveEntry(msg, displayMessages, i, detectedCondition);
                     if (!entry) return null;
 
                     // confirm-panel → intake confirmation (the ONE stacked exception)
@@ -2098,18 +2148,9 @@ export default function AskDrFleshner() {
               // Progress by registry qid gives granular, monotonic progress
               // that moves with every answered question — much more accurate
               // than the coarse /api/analyze phase labels which lag and jump
-              // in big steps. Only ED uses the registry; BPH/MH still use the
-              // analyze phase map.
+              // in big steps. ED and BPH both use registries; MH still uses
+              // the analyze phase map.
 
-              const PHASE_LABELS = {
-                1: "Getting started",
-                2: "Background questions",
-                3: "Symptom check-in",
-                4: "Understanding your situation",
-                5: "Safety check",
-                6: "Final checks",
-                7: "Wrapping up",
-              };
               const analyzePhaseMap = {
                 opening: { pct: 5, label: "Getting started" },
                 intake: { pct: 20, label: "Background questions" },
@@ -2130,31 +2171,34 @@ export default function AskDrFleshner() {
 
               let pct = 0;
               let label = "";
+              const hasRegistry = detectedCondition === "ed" || detectedCondition === "bph";
 
               if (isTerminal) {
                 pct = 100;
                 label = "Consultation complete";
-              } else if (detectedCondition === "ed") {
+              } else if (hasRegistry) {
                 // Walk backwards to find the most recent assistant message with
                 // a resolvable qid, then map its registry index to a percentage.
+                const activeRegistry = getRegistry(detectedCondition);
+                const phaseLabels = PHASE_LABELS_BY_CONDITION[detectedCondition] || {};
                 let registryIdx = -1;
                 let matchedEntry = null;
                 for (let i = messages.length - 1; i >= 0; i--) {
                   const m = messages[i];
                   if (m.role !== "assistant") continue;
-                  const entry = resolveEntry(m, messages, i);
+                  const entry = resolveEntry(m, messages, i, detectedCondition);
                   if (entry) {
-                    registryIdx = ED_QUESTION_REGISTRY.findIndex((e) => e.id === entry.id);
+                    registryIdx = activeRegistry.findIndex((e) => e.id === entry.id);
                     matchedEntry = entry;
                     break;
                   }
                 }
 
                 if (registryIdx >= 0) {
-                  const total = ED_QUESTION_REGISTRY.length;
+                  const total = activeRegistry.length;
                   // Scale: first qid = 3%, last = 98%. 100% reserved for terminal.
                   pct = Math.round(3 + (registryIdx / (total - 1)) * 95);
-                  label = PHASE_LABELS[matchedEntry.phase] || "In progress";
+                  label = phaseLabels[matchedEntry.phase] || "In progress";
                 } else {
                   // No registry match yet — very first message, or opening.
                   const info = analyzePhaseMap[clinicalState?.phase];
@@ -2162,7 +2206,7 @@ export default function AskDrFleshner() {
                   label = info?.label || (messages.length > 0 ? "Getting started" : "");
                 }
               } else {
-                // BPH / MH: use the /api/analyze phase map as before.
+                // MH / unknown: use the /api/analyze phase map.
                 const info = analyzePhaseMap[clinicalState?.phase];
                 pct = info?.pct || (messages.length > 0 ? Math.min(messages.length * 3, 15) : 0);
                 label = info?.label || (messages.length > 0 ? "Getting started" : "");
