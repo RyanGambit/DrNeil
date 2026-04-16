@@ -839,6 +839,10 @@ export default function AskDrFleshner() {
             })}
           </div>
         )}
+        <div style={{
+          fontSize: 11, color: T.textMuted, marginTop: 10, textAlign: "center",
+          fontFamily: T.font,
+        }}>You can also type a response below</div>
       </div>
     );
   }
