@@ -486,12 +486,17 @@ const ED_QUESTION_REGISTRY = [
     id: "clinical-q7f-why-stopped",
     phase: 4,
     question: "What made you decide it wasn't working?",
-    chips: null,
-    layout: null,
+    chips: ["Didn't work at all", "Helped some, not enough", "Side effects", "Something else"],
+    layout: "horizontal",
     condition: "prior_treatment == Yes",
     progressCue: null,
-    routing: null,
-    notes: "Listen for: unrealistic expectations, gave up too soon, side effects, genuinely didn't work."
+    routing: {
+      "Didn't work at all": "continue",
+      "Helped some, not enough": "continue",
+      "Side effects": "continue",
+      "Something else": "continue"
+    },
+    notes: "Listen for: unrealistic expectations, gave up too soon, side effects, genuinely didn't work. All chip answers are valid — record and continue."
   },
 
   {
@@ -507,9 +512,9 @@ const ED_QUESTION_REGISTRY = [
       "Less confident in myself": "continue",
       "Worried something's wrong": "continue",
       "Just want to feel normal again": "continue",
-      "Something else": "ask_open_followup"
+      "Something else": "continue"
     },
-    notes: "Check for discordance: mild SHIM but very distressed, or severe SHIM but 'it's fine'. If patient selects 'Something else', ask a brief open-text follow-up: 'Tell me a bit more about that — what's the hardest part?' before moving on."
+    notes: "Check for discordance: mild SHIM but very distressed, or severe SHIM but 'it's fine'. All chip answers (including 'Something else') are valid — record and continue. If patient types their own answer in the main input instead, accept it as-is."
   },
 
   // =========================================================================
@@ -520,12 +525,18 @@ const ED_QUESTION_REGISTRY = [
     id: "partner-handling",
     phase: 4,
     question: "How is your partner handling this?",
-    chips: null,
-    layout: null,
+    chips: ["They're supportive", "It's causing some tension", "We don't really talk about it", "They don't know yet", "Something else"],
+    layout: "horizontal",
     condition: "relationship_status == Yes",
     progressCue: "That's it for the questions. You did great — I have a clear picture now.",
-    routing: null,
-    notes: "NEVER use gendered pronouns for partner. Always they/them. Do NOT probe deeply into relationship dynamics."
+    routing: {
+      "They're supportive": "continue",
+      "It's causing some tension": "note_for_outcome_c_consideration",
+      "We don't really talk about it": "continue",
+      "They don't know yet": "continue",
+      "Something else": "continue"
+    },
+    notes: "NEVER use gendered pronouns for partner. Always they/them. Do NOT probe deeply into relationship dynamics. All chip answers (including 'Something else') are valid — record and continue. Significant tension is noted in SOAP but does not block Outcome B."
   },
 
   // =========================================================================
