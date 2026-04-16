@@ -284,9 +284,13 @@ const QID_MARKER_RE = /\s*<!--\s*qid:([a-z0-9-]+)\s*-->\s*$/i;
 function parseQID(messageText) {
   if (!messageText) return { cleanText: messageText, qid: null };
   const match = messageText.match(QID_MARKER_RE);
-  if (!match) return { cleanText: messageText, qid: null };
-  const qid = match[1];
-  const cleanText = messageText.replace(QID_MARKER_RE, "").trimEnd();
+  const qid = match ? match[1] : null;
+  // Strip the marker (if present) AND trim leading/trailing whitespace so
+  // stray newlines from the AI don't render as blank lines at the top of
+  // the bubble. Also collapses 3+ consecutive newlines to a double-newline
+  // paragraph break — anything more than that is a formatting glitch.
+  const stripped = match ? messageText.replace(QID_MARKER_RE, "") : messageText;
+  const cleanText = stripped.trim().replace(/\n{3,}/g, "\n\n");
   return { cleanText, qid };
 }
 
