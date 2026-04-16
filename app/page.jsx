@@ -2104,8 +2104,20 @@ export default function AskDrFleshner() {
                 outcome_delivery: { pct: 95, label: "Wrapping up" },
                 closed: { pct: 100, label: "Consultation complete" },
               };
-              const phase = clinicalState?.phase;
-              const info = phaseMap[phase] || null;
+
+              // Frontend override: /api/analyze sometimes lags behind and
+              // classifies the end-of-consult as "follow_up" or similar.
+              // If the most recent assistant message shows clear close signals
+              // (scheduling button, sign-off, ER-safety close), force "closed".
+              const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+              const lastText = lastAssistant?.text || "";
+              const isTerminal =
+                /\[Schedule (Follow-Up|In-Person Visit|Testing)\]/i.test(lastText) ||
+                /Take care[,!\s]/i.test(lastText) ||
+                /stop the pill and go to the ER/i.test(lastText);
+
+              const effectivePhase = isTerminal ? "closed" : clinicalState?.phase;
+              const info = phaseMap[effectivePhase] || null;
               const pct = info?.pct || (messages.length > 0 ? Math.min(messages.length * 3, 15) : 0);
               const label = info?.label || (messages.length > 0 ? "Getting started" : "");
 
