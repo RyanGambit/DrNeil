@@ -1380,9 +1380,19 @@ REQUIRED PROGRESS CUE (after clinical Q7 — include in same message as Q8): "Al
 
 Q8: DEGREE OF BOTHER / GOALS (AUA)
 Ask EXACTLY: "What bothers you the most about all of this?"
-(open text — no chips)
+Chips: "Affecting my relationship" / "Less confident in myself" / "Worried something's wrong" / "Just want to feel normal again" / "Something else"
 Append: <!-- qid:clinical-q8-bother -->
-- Hear it in their words
+
+RESPONSE HANDLING:
+- If patient selects one of the first four chips → record it and continue
+- If patient selects "Something else" → ask ONE brief open-text follow-up:
+  "Tell me a bit more about that — what's the hardest part?"
+  (no marker on this follow-up — it's contextual, not a registry question)
+  After they respond, continue.
+- If patient types a free-text answer instead of tapping a chip → record it
+  as their own words and continue. Do NOT re-present the chips.
+
+- Hear it in their words (whether chip or free text)
 - Check for discordance (mild SHIM but very distressed, or severe SHIM but "it's fine")
 - Understand what "good enough" looks like
 SOURCE: AUA "degree of bother"

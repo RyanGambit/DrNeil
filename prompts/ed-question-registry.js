@@ -498,12 +498,18 @@ const ED_QUESTION_REGISTRY = [
     id: "clinical-q8-bother",
     phase: 4,
     question: "What bothers you the most about all of this?",
-    chips: null,
-    layout: null,
+    chips: ["Affecting my relationship", "Less confident in myself", "Worried something's wrong", "Just want to feel normal again", "Something else"],
+    layout: "horizontal",
     condition: null,
     progressCue: "Almost done — one more.",
-    routing: null,
-    notes: "Check for discordance: mild SHIM but very distressed, or severe SHIM but 'it's fine'. After this, AI may optionally ask 'If we could improve things, what would good enough look like for you?'"
+    routing: {
+      "Affecting my relationship": "continue",
+      "Less confident in myself": "continue",
+      "Worried something's wrong": "continue",
+      "Just want to feel normal again": "continue",
+      "Something else": "ask_open_followup"
+    },
+    notes: "Check for discordance: mild SHIM but very distressed, or severe SHIM but 'it's fine'. If patient selects 'Something else', ask a brief open-text follow-up: 'Tell me a bit more about that — what's the hardest part?' before moving on."
   },
 
   // =========================================================================
