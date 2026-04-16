@@ -773,21 +773,17 @@ export default function AskDrFleshner() {
   }
 
   // ── RESPONSE CARD: Single contained component for ALL question types ──
-  // Rules: bordered card, 48px indent, 78% max-width, "or type" divider,
-  // disappears after answering. Same container for chips, scored, everything.
-  function ResponseCard({ chips, scored, messageIndex, placeholder = "Or type your answer..." }) {
+  // ResponseCard: chips only, no text field. Contained card with border + shadow.
+  // The main chat input at the bottom is always available as an escape hatch.
+  // Removing the text field prevents patients from going off-script with
+  // free-form answers that break the clinical flow.
+  function ResponseCard({ chips, scored, messageIndex }) {
     const state = panelStates[messageIndex];
-    const [textValue, setTextValue] = useState("");
     if (state?.submitted) return null;
 
     const handleChipTap = (chip) => {
       const cleanLabel = chip.replace(/^[a-e]\)\s*/i, "");
       handlePanelSubmit(messageIndex, cleanLabel);
-    };
-
-    const handleTextSend = () => {
-      if (!textValue.trim()) return;
-      handlePanelSubmit(messageIndex, textValue.trim());
     };
 
     return (
@@ -797,9 +793,9 @@ export default function AskDrFleshner() {
         borderRadius: 16, padding: scored ? "12px 14px" : "14px 16px",
         boxShadow: "0 1px 4px rgba(0,0,0,0.04)", fontFamily: T.font,
       }}>
-        {/* Chips — horizontal or scored vertical */}
+        {/* Horizontal chips */}
         {chips && !scored && (
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {chips.map((chip, i) => (
               <button key={i} onClick={() => handleChipTap(chip)} style={{
                 padding: "10px 22px", borderRadius: 22,
@@ -814,8 +810,9 @@ export default function AskDrFleshner() {
             ))}
           </div>
         )}
+        {/* Scored vertical cards (SHIM a-e) */}
         {chips && scored && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {chips.map((chip, i) => {
               const letter = String.fromCharCode(97 + i);
               const cleanLabel = chip.replace(/^[a-e]\)\s*/i, "");
@@ -842,33 +839,6 @@ export default function AskDrFleshner() {
             })}
           </div>
         )}
-        {/* "or type" divider */}
-        {chips && (
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-            <div style={{ flex: 1, height: 1, background: T.borderLight }} />
-            <span style={{
-              fontSize: 11, color: T.textMuted, textTransform: "uppercase",
-              letterSpacing: "0.5px", fontFamily: T.font,
-            }}>or type</span>
-            <div style={{ flex: 1, height: 1, background: T.borderLight }} />
-          </div>
-        )}
-        {/* Text field + Send */}
-        <div style={{ display: "flex", gap: 8 }}>
-          <input type="text" value={textValue} onChange={(e) => setTextValue(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") handleTextSend(); }}
-            placeholder={placeholder} style={{
-              flex: 1, padding: "10px 14px", borderRadius: 10,
-              border: `1.5px solid ${T.border}`, fontSize: 14,
-              fontFamily: T.font, color: T.text, background: "#fafbfc", outline: "none",
-            }} />
-          <button onClick={handleTextSend} style={{
-            padding: "10px 20px", borderRadius: 10, border: "none",
-            background: T.accent, color: "#fff",
-            fontSize: 13, fontWeight: 600, fontFamily: T.font,
-            cursor: "pointer",
-          }}>Send</button>
-        </div>
       </div>
     );
   }
