@@ -299,6 +299,38 @@ function getRegistryEntry(qid) {
   return ED_QUESTION_REGISTRY.find((q) => q.id === qid) || null;
 }
 
+// FALLBACK: if the AI forgets the qid marker, try to recover by matching
+// the AI message text against registry question text. Only runs when the
+// marker is missing. Uses the LAST question sentence from each registry
+// entry as the needle, trimmed and lowercased for robustness.
+function detectQidFromText(messageText) {
+  if (!messageText) return null;
+  const lower = messageText.toLowerCase();
+  // Prefer LONGER needles first — they're more specific
+  const candidates = ED_QUESTION_REGISTRY
+    .filter((e) => e.question)
+    .map((e) => {
+      // Take the last line ending in "?" from the question text
+      const lines = e.question.split("\n").map((l) => l.trim()).filter(Boolean);
+      const qLine = lines.reverse().find((l) => l.includes("?")) || lines[0] || "";
+      return { id: e.id, needle: qLine.toLowerCase() };
+    })
+    .filter((c) => c.needle.length >= 15)
+    .sort((a, b) => b.needle.length - a.needle.length);
+
+  for (const c of candidates) {
+    if (lower.includes(c.needle)) return c.id;
+  }
+  return null;
+}
+
+function resolveEntry(msg) {
+  const direct = getRegistryEntry(msg.qid);
+  if (direct) return direct;
+  const fallbackQid = detectQidFromText(msg.text);
+  return fallbackQid ? getRegistryEntry(fallbackQid) : null;
+}
+
 // Confirm field regex — matches "Age: 58", "**Age:** 58", "**Age**: 58", etc.
 const CONFIRM_FIELD_RE = /^\*{0,2}([A-Za-z][A-Za-z\s]*?)\*{0,2}:\*{0,2}\s*(.+)$/;
 const CONFIRM_KNOWN_LABELS = ["age", "allergies", "medications", "medical history", "surgeries", "surgery", "medical hx"];
@@ -331,7 +363,7 @@ function parseConfirmFields(messageText) {
 // stacked CV / safety gate panels which no longer exist.
 function getDisplayText(msg, condition) {
   if (msg.role !== "assistant" || condition !== "ed") return msg.text;
-  const entry = getRegistryEntry(msg.qid);
+  const entry = resolveEntry(msg);
 
   if (entry?.type === "confirm-panel") {
     return msg.text.split("\n").filter(line => {
@@ -1977,8 +2009,9 @@ export default function AskDrFleshner() {
                   </div>
                   {msg.role === "assistant" && detectedCondition === "ed" && (() => {
                     // Registry-driven: look up the AI-supplied qid marker.
-                    // No qid → no component (e.g. pure acknowledgments, outcome C text).
-                    const entry = getRegistryEntry(msg.qid);
+                    // If the AI forgot the marker, fall back to matching the
+                    // registry's question text against the message.
+                    const entry = resolveEntry(msg);
                     if (!entry) return null;
 
                     // confirm-panel → intake confirmation (the ONE stacked exception)
