@@ -324,11 +324,52 @@ function detectQidFromText(messageText) {
   return null;
 }
 
-function resolveEntry(msg) {
+// Non-committal responses that often trigger an AI rephrase of the same question.
+// When we see one of these followed by a marker-less question from the AI, it's
+// almost certainly a rephrase — so the previous assistant qid still applies.
+const NON_COMMITTAL_RE = /^(not sure|maybe|i don['']?t know|idk|unsure|don['']?t know|i['']?m not sure|actually,?\s*i['']?m not sure about that)\s*\.?\s*$/i;
+
+function resolveEntry(msg, messages, index) {
+  // 1. Direct marker lookup (happy path)
   const direct = getRegistryEntry(msg.qid);
   if (direct) return direct;
+
+  // 2. Text match against registry questions (AI dropped the marker but kept
+  //    the verbatim question text)
   const fallbackQid = detectQidFromText(msg.text);
-  return fallbackQid ? getRegistryEntry(fallbackQid) : null;
+  const byText = fallbackQid ? getRegistryEntry(fallbackQid) : null;
+  if (byText) return byText;
+
+  // 3. Contextual rephrase fallback — only when we have messages/index.
+  //    If the current assistant message asks a "?" and the patient's most
+  //    recent response was non-committal ("Not sure" etc.), assume the AI
+  //    is rephrasing and reuse the previous assistant qid.
+  if (!messages || typeof index !== "number") return null;
+  if (!msg.text || !msg.text.includes("?")) return null;
+
+  let lastUserText = null;
+  let prevAssistantQid = null;
+  for (let i = index - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (!m) continue;
+    if (m.role === "user" && lastUserText === null) {
+      lastUserText = (m.text || "").trim();
+      continue;
+    }
+    if (m.role === "assistant" && lastUserText !== null) {
+      if (m.qid) {
+        prevAssistantQid = m.qid;
+      } else {
+        prevAssistantQid = detectQidFromText(m.text);
+      }
+      break;
+    }
+  }
+
+  if (prevAssistantQid && lastUserText && NON_COMMITTAL_RE.test(lastUserText)) {
+    return getRegistryEntry(prevAssistantQid);
+  }
+  return null;
 }
 
 // Confirm field regex — matches "Age: 58", "**Age:** 58", "**Age**: 58", etc.
@@ -361,9 +402,9 @@ function parseConfirmFields(messageText) {
 //      lines since the ResponseCard renders them as scored chip cards.
 // All other keyword-based stripping is gone — that logic belonged to the old
 // stacked CV / safety gate panels which no longer exist.
-function getDisplayText(msg, condition) {
+function getDisplayText(msg, condition, messages, index) {
   if (msg.role !== "assistant" || condition !== "ed") return msg.text;
-  const entry = resolveEntry(msg);
+  const entry = resolveEntry(msg, messages, index);
 
   if (entry?.type === "confirm-panel") {
     return msg.text.split("\n").filter(line => {
@@ -2004,14 +2045,15 @@ export default function AskDrFleshner() {
                   <div style={{ ...styles.messageBubbleRow, justifyContent: msg.role === "user" ? "flex-end" : "flex-start" }}>
                     {msg.role === "assistant" && <img src={DR_AVATAR} alt="" style={styles.msgAvatar} />}
                     <div style={{ ...(msg.role === "user" ? styles.userBubble : styles.assistantBubble), maxWidth: isMobile ? "90%" : "75%" }}>
-                      <div style={styles.bubbleText} dangerouslySetInnerHTML={{ __html: renderMarkdown(getDisplayText(msg, detectedCondition)) }} />
+                      <div style={styles.bubbleText} dangerouslySetInnerHTML={{ __html: renderMarkdown(getDisplayText(msg, detectedCondition, displayMessages, i)) }} />
                     </div>
                   </div>
                   {msg.role === "assistant" && detectedCondition === "ed" && (() => {
                     // Registry-driven: look up the AI-supplied qid marker.
-                    // If the AI forgot the marker, fall back to matching the
-                    // registry's question text against the message.
-                    const entry = resolveEntry(msg);
+                    // Three fallback layers: (1) direct marker, (2) text match
+                    // against registry question, (3) contextual — if patient's
+                    // last reply was non-committal, reuse previous qid (rephrase).
+                    const entry = resolveEntry(msg, displayMessages, i);
                     if (!entry) return null;
 
                     // confirm-panel → intake confirmation (the ONE stacked exception)
