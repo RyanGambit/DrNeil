@@ -466,7 +466,8 @@ function getDisplayText(msg, condition, messages, index) {
   }
 
   if (entry?.layout === "scored") {
-    return msg.text.split("\n").filter(line => !line.trim().match(/^[a-e]\)\s+/)).join("\n");
+    // Scored questions use a-e (ED SHIM), a-f (BPH IPSS Q1-7), or a-g (BPH IPSS Q8 QoL).
+    return msg.text.split("\n").filter(line => !line.trim().match(/^[a-g]\)\s+/)).join("\n");
   }
 
   return msg.text;
@@ -666,7 +667,8 @@ export default function AskDrFleshner() {
     if (state?.submitted) return null;
 
     const handleChipTap = (chip) => {
-      const cleanLabel = chip.replace(/^[a-e]\)\s*/i, "");
+      // Strip letter prefix (a-g) — ED SHIM uses a-e, BPH IPSS uses a-f or a-g.
+      const cleanLabel = chip.replace(/^[a-g]\)\s*/i, "");
       handlePanelSubmit(messageIndex, cleanLabel);
     };
 
@@ -694,12 +696,12 @@ export default function AskDrFleshner() {
             ))}
           </div>
         )}
-        {/* Scored vertical cards (SHIM a-e) */}
+        {/* Scored vertical cards — ED SHIM (a-e), BPH IPSS (a-f or a-g). */}
         {chips && scored && (
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             {chips.map((chip, i) => {
               const letter = String.fromCharCode(97 + i);
-              const cleanLabel = chip.replace(/^[a-e]\)\s*/i, "");
+              const cleanLabel = chip.replace(/^[a-g]\)\s*/i, "");
               return (
                 <button key={i} onClick={() => handleChipTap(chip)} style={{
                   display: "flex", alignItems: "center", gap: 12,
