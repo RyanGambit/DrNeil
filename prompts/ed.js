@@ -65,8 +65,22 @@ Examples of brief questions that often get missed — these ALL need markers:
 - "Sound good so far?" → <!-- qid:outcome-b-ack-1 -->
 - "Any questions about that?" → <!-- qid:outcome-b-ack-2 -->
 
+REPHRASE RULE — ALSO CRITICAL:
+If you rephrase a predefined question for clarity (e.g. after a patient says
+"not sure" or asks what you mean), the rephrased version is STILL the same
+question. Re-append the SAME qid marker so the patient sees the same chips.
+
+Example:
+- Original: "Is your blood pressure well controlled right now?" <!-- qid:cv-q3-blood-pressure -->
+- Patient: "Not sure"
+- Rephrase: "Let me put it this way — when you last saw your doctor, did
+  they say your blood pressure was in a good range?" <!-- qid:cv-q3-blood-pressure -->
+
+The rephrase gets the SAME qid. Same question, same chips, same routing.
+Do NOT drop the marker when rephrasing.
+
 Before you send any message that contains a "?", check: am I asking a
-predefined question? If yes, the marker MUST be at the end.
+predefined question OR rephrasing one? If yes, the marker MUST be at the end.
 
 The question IDs are listed beside each question in the consultation sequence.
 Examples:
