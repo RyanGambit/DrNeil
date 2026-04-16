@@ -413,7 +413,22 @@ function resolveEntry(msg, messages, index, condition) {
   }
 
   if (prevAssistantQid && lastUserText && NON_COMMITTAL_RE.test(lastUserText)) {
-    return getRegistryEntry(prevAssistantQid, condition);
+    // Don't falsely fire on a valid chip answer. Some questions (e.g.,
+    // BPH followup-snoring, cv-q1-stairs) offer "Not sure" as a legitimate
+    // chip option. If the patient tapped that chip, we shouldn't treat it
+    // as a rephrase signal — they gave a real answer; the AI is on the
+    // next question, not rephrasing the previous.
+    const prevEntry = getRegistryEntry(prevAssistantQid, condition);
+    const prevChips = prevEntry?.chips || [];
+    const normalized = lastUserText.toLowerCase().replace(/[.!?,]+$/, "").trim();
+    const wasValidChip = prevChips.some((c) => {
+      // Chip text as-sent: letter prefix stripped for scored chips.
+      const stripped = c.replace(/^[a-g]\)\s*/i, "").toLowerCase();
+      return stripped === normalized;
+    });
+    if (wasValidChip) return null;
+
+    return prevEntry;
   }
   return null;
 }
@@ -2164,12 +2179,19 @@ export default function AskDrFleshner() {
               };
 
               // Detect terminal close signals in the most recent AI message.
+              // Covers: Outcome A / B closes ([Schedule ...] + "Take care"),
+              // Outcome B safety warning (ED), and Outcome C / D handoffs
+              // that don't use a Schedule button (e.g., BPH in-person handoff,
+              // walk-in clinic redirect, ER redirect).
               const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
               const lastText = lastAssistant?.text || "";
               const isTerminal =
                 /\[Schedule (Follow-Up|In-Person Visit|Testing)\]/i.test(lastText) ||
                 /Take care[,!\s]/i.test(lastText) ||
-                /stop the pill and go to the ER/i.test(lastText);
+                /stop the pill and go to the ER/i.test(lastText) ||
+                /(get you|let'?s get you|you should get) scheduled (for|in) (an?\s+)?in[- ]person/i.test(lastText) ||
+                /(go to|head to) (the )?(emergency (department|room)|ER)\b/i.test(lastText) ||
+                /(go to|visit|head to)(\s+a| the)?\s+walk[- ]in clinic/i.test(lastText);
 
               let pct = 0;
               let label = "";
