@@ -64,9 +64,14 @@ Format the output with clear section headers. Be specific and clinical.`;
         "anthropic-version": "2023-06-01",
       },
       body: JSON.stringify({
-        model: "claude-opus-4-6",
+        // Haiku 4.5 handles structured summarization well and is ~3-5x
+        // faster than Opus for this task. SOAP generation doesn't need
+        // Opus-level reasoning — it's a transformation of the transcript
+        // into a documented format. Opus was the bottleneck making the
+        // Visit Summary hang on "Preparing..." after session close.
+        model: "claude-haiku-4-5-20251001",
         temperature: 0.2,
-        max_tokens: 2000,
+        max_tokens: 1800,
         messages: [{ role: "user", content: soapPrompt }],
       }),
     });
