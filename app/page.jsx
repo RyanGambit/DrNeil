@@ -372,6 +372,22 @@ function detectQidFromText(messageText, condition) {
 // almost certainly a rephrase — so the previous assistant qid still applies.
 const NON_COMMITTAL_RE = /^(not sure|maybe|i don['']?t know|idk|unsure|don['']?t know|i['']?m not sure|actually,?\s*i['']?m not sure about that)\s*\.?\s*$/i;
 
+// Terminal-signal detection. Used by both the progress bar (to jump to 100%)
+// and the session close-out logic (to trigger SOAP generation, disable input,
+// show the Session Complete Card). Kept as a single shared function so the
+// two code paths can't drift.
+function isTerminalMessage(text) {
+  if (!text) return false;
+  return (
+    /\[Schedule (Follow-Up|In-Person Visit|Testing)\]/i.test(text) ||
+    /Take care[,!\s]/i.test(text) ||
+    /stop the pill and go to the ER/i.test(text) ||
+    /(get you|let'?s get you|you should get) scheduled (for|in) (an?\s+)?in[- ]person/i.test(text) ||
+    /(go to|head to) (the )?(emergency (department|room)|ER)\b/i.test(text) ||
+    /(go to|visit|head to)(\s+a| the)?\s+walk[- ]in clinic/i.test(text)
+  );
+}
+
 function resolveEntry(msg, messages, index, condition) {
   // All three layers are scoped to the active condition's registry so
   // BPH messages can't accidentally match ED entries and vice versa.
@@ -505,6 +521,12 @@ export default function AskDrFleshner() {
   const [waitingStep, setWaitingStep] = useState(0);
   const [soapNote, setSoapNote] = useState("");
   const [soapLoading, setSoapLoading] = useState(false);
+  // Session lifecycle: terminal signal in last AI message → sessionEnded
+  // flips true. SOAP generation auto-triggers in the background; patient
+  // stays on the chat view and sees a Session Complete Card with a
+  // Download Visit Summary button. Chat input is disabled.
+  const [sessionEnded, setSessionEnded] = useState(false);
+  const [soapAutoTriggered, setSoapAutoTriggered] = useState(false);
   const [doctorEmail, setDoctorEmail] = useState("");
   const [emailSent, setEmailSent] = useState(false);
   const [emailSending, setEmailSending] = useState(false);
@@ -892,6 +914,49 @@ export default function AskDrFleshner() {
 
     analyzeConversation();
   }, [messages]);
+
+
+  // ── SESSION END WATCHER ──
+  // When the most recent assistant message contains a terminal signal
+  // (Take care / Schedule link / ER handoff / walk-in / in-person referral)
+  // we flip sessionEnded true ONCE, then kick off SOAP generation in the
+  // background so the Download Visit Summary button becomes active.
+  useEffect(() => {
+    if (step !== "chat" || sessionEnded) return;
+    const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+    if (!lastAssistant || !isTerminalMessage(lastAssistant.text)) return;
+
+    setSessionEnded(true);
+
+    // Kick off SOAP generation exactly once, asynchronously.
+    if (!soapAutoTriggered) {
+      setSoapAutoTriggered(true);
+      (async () => {
+        try {
+          setSoapLoading(true);
+          const transcript = messages
+            .map((m) => `${m.role === "user" ? "PATIENT" : "DR. FLESHNER"}: ${m.text}`)
+            .join("\n\n");
+          const response = await fetch("/api/soap", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              transcript,
+              patientContext: initialContextRef.current,
+              condition: detectedCondition,
+            }),
+          });
+          const data = await response.json();
+          setSoapNote(data.note || "Unable to generate visit summary. Please try again.");
+        } catch (err) {
+          console.error("SOAP generation error:", err);
+          setSoapNote("Error generating visit summary. Please try again.");
+        } finally {
+          setSoapLoading(false);
+        }
+      })();
+    }
+  }, [messages, step, sessionEnded, soapAutoTriggered, detectedCondition]);
 
 
   // ── WELCOME SCREEN (Landing Page) ──
@@ -1905,6 +1970,43 @@ export default function AskDrFleshner() {
   }
 
 
+  // ── DOWNLOAD VISIT SUMMARY ──
+  // Triggered by the Session Complete Card. Produces a markdown file the
+  // patient can save locally. PDF rendering would require a new dep
+  // (jsPDF / html2pdf) — markdown ships now, upgrade later if needed.
+  const downloadVisitSummary = () => {
+    if (!soapNote) return;
+    const patientName = patientData?.name || `${firstName} ${lastName}`.trim() || "Patient";
+    const dateStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const conditionLabel = CONDITION_LABELS[detectedCondition] || "Urology";
+
+    const header = [
+      "# AskDrFleshner — Visit Summary",
+      "",
+      `**Patient:** ${patientName}`,
+      `**Date:** ${new Date().toLocaleDateString("en-CA")}`,
+      `**Consultation:** ${conditionLabel}`,
+      "",
+      "---",
+      "",
+    ].join("\n");
+    const body = header + soapNote;
+
+    const safeName = patientName.replace(/[^a-zA-Z0-9-]+/g, "_");
+    const filename = `AskDrFleshner_Visit_Summary_${safeName}_${dateStr}.md`;
+
+    const blob = new Blob([body], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+
   const handleSend = () => {
     if (!input.trim() || isLoading) return;
     const userText = input.trim();
@@ -2113,7 +2215,7 @@ export default function AskDrFleshner() {
                       <div style={styles.bubbleText} dangerouslySetInnerHTML={{ __html: renderMarkdown(getDisplayText(msg, detectedCondition, displayMessages, i)) }} />
                     </div>
                   </div>
-                  {msg.role === "assistant" && (detectedCondition === "ed" || detectedCondition === "bph") && (() => {
+                  {msg.role === "assistant" && !sessionEnded && (detectedCondition === "ed" || detectedCondition === "bph") && (() => {
                     // Registry-driven: look up the AI-supplied qid marker.
                     // Three fallback layers: (1) direct marker, (2) text match
                     // against registry question, (3) contextual — if patient's
@@ -2143,7 +2245,7 @@ export default function AskDrFleshner() {
                 </div>
               );
             })}
-            {isLoading && (
+            {isLoading && !sessionEnded && (
               <div style={{ ...styles.messageBubbleRow, justifyContent: "flex-start" }}>
                 <img src={DR_AVATAR} alt="" style={styles.msgAvatar} />
                 <div style={styles.assistantBubble}>
@@ -2153,6 +2255,56 @@ export default function AskDrFleshner() {
                     <span style={{ ...styles.dot, animationDelay: "0.4s" }}>●</span>
                   </div>
                 </div>
+              </div>
+            )}
+            {sessionEnded && (
+              <div style={{
+                margin: "18px auto 8px",
+                maxWidth: 520,
+                border: "1.5px solid #0f7b6c",
+                background: "#f0faf7",
+                borderRadius: 14,
+                padding: "18px 22px",
+                boxShadow: "0 2px 8px rgba(15,123,108,0.08)",
+                fontFamily: "'Söhne', -apple-system, 'Segoe UI', system-ui, sans-serif",
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                  <div style={{
+                    width: 28, height: 28, borderRadius: "50%",
+                    background: "#0f7b6c", color: "#fff",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    fontSize: 16, fontWeight: 700,
+                  }}>✓</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: "#0b6358" }}>
+                    Consultation Complete
+                  </div>
+                </div>
+                <p style={{
+                  fontSize: 14, color: "#4B5563", margin: "0 0 14px", lineHeight: 1.5,
+                }}>
+                  {soapLoading
+                    ? "Preparing your visit summary…"
+                    : soapNote
+                      ? "Your visit summary is ready."
+                      : "We couldn't prepare the visit summary. You can still leave the page — we have a copy on file."}
+                </p>
+                <button
+                  onClick={downloadVisitSummary}
+                  disabled={!soapNote || soapLoading}
+                  style={{
+                    padding: "10px 18px",
+                    borderRadius: 10,
+                    border: "none",
+                    background: soapNote && !soapLoading ? "#0f7b6c" : "#a8c8c1",
+                    color: "#fff",
+                    fontSize: 14,
+                    fontWeight: 600,
+                    fontFamily: "inherit",
+                    cursor: soapNote && !soapLoading ? "pointer" : "not-allowed",
+                    boxShadow: "0 2px 4px rgba(15,123,108,0.2)",
+                  }}>
+                  {soapLoading ? "Preparing…" : "Download Visit Summary"}
+                </button>
               </div>
             )}
             <div ref={chatEndRef} />
@@ -2179,19 +2331,10 @@ export default function AskDrFleshner() {
               };
 
               // Detect terminal close signals in the most recent AI message.
-              // Covers: Outcome A / B closes ([Schedule ...] + "Take care"),
-              // Outcome B safety warning (ED), and Outcome C / D handoffs
-              // that don't use a Schedule button (e.g., BPH in-person handoff,
-              // walk-in clinic redirect, ER redirect).
+              // Uses the shared isTerminalMessage() helper so the progress bar
+              // and the session close-out logic agree on what "terminal" means.
               const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
-              const lastText = lastAssistant?.text || "";
-              const isTerminal =
-                /\[Schedule (Follow-Up|In-Person Visit|Testing)\]/i.test(lastText) ||
-                /Take care[,!\s]/i.test(lastText) ||
-                /stop the pill and go to the ER/i.test(lastText) ||
-                /(get you|let'?s get you|you should get) scheduled (for|in) (an?\s+)?in[- ]person/i.test(lastText) ||
-                /(go to|head to) (the )?(emergency (department|room)|ER)\b/i.test(lastText) ||
-                /(go to|visit|head to)(\s+a| the)?\s+walk[- ]in clinic/i.test(lastText);
+              const isTerminal = isTerminalMessage(lastAssistant?.text);
 
               let pct = 0;
               let label = "";
@@ -2254,41 +2397,56 @@ export default function AskDrFleshner() {
                 </div>
               ) : null;
             })()}
-            <div style={styles.inputRow}>
-              <textarea
-                style={styles.chatInput}
-                value={input}
-                onChange={(e) => { setInput(e.target.value); }}
-                onKeyDown={handleKeyDown}
-                placeholder={isListening ? "Listening..." : "Type or tap the mic to speak..."}
-                rows={1}
-              />
-              <button
-                style={{
-                  ...styles.micBtn,
-                  background: isListening ? "#DC2626" : "#F5FBF9",
-                  borderColor: isListening ? "#DC2626" : "#D8F0EA",
-                  color: isListening ? "#FFFFFF" : "#506D65",
-                  animation: isListening ? "micPulse 1.5s ease-in-out infinite" : "none",
-                }}
-                onClick={toggleListening}
-                title={isListening ? "Stop listening" : "Start voice input"}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect x="9" y="1" width="6" height="12" rx="3" />
-                  <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                  <line x1="12" y1="19" x2="12" y2="23" />
-                  <line x1="8" y1="23" x2="16" y2="23" />
-                </svg>
-              </button>
-              <button
-                style={{ ...styles.sendBtn, opacity: input.trim() && !isLoading ? 1 : 0.4 }}
-                onClick={() => { if (isListening) recognitionRef.current?.stop(); handleSend(); }}
-                disabled={!input.trim() || isLoading}
-              >
-                ↑
-              </button>
-            </div>
+            {sessionEnded ? (
+              <div style={{
+                padding: "12px 16px",
+                borderRadius: 10,
+                border: "1px dashed #D8F0EA",
+                background: "#F5FBF9",
+                color: "#506D65",
+                fontSize: 14,
+                textAlign: "center",
+                fontFamily: "'Söhne', -apple-system, 'Segoe UI', system-ui, sans-serif",
+              }}>
+                This consultation has ended. If you need further help, please book a follow-up.
+              </div>
+            ) : (
+              <div style={styles.inputRow}>
+                <textarea
+                  style={styles.chatInput}
+                  value={input}
+                  onChange={(e) => { setInput(e.target.value); }}
+                  onKeyDown={handleKeyDown}
+                  placeholder={isListening ? "Listening..." : "Type or tap the mic to speak..."}
+                  rows={1}
+                />
+                <button
+                  style={{
+                    ...styles.micBtn,
+                    background: isListening ? "#DC2626" : "#F5FBF9",
+                    borderColor: isListening ? "#DC2626" : "#D8F0EA",
+                    color: isListening ? "#FFFFFF" : "#506D65",
+                    animation: isListening ? "micPulse 1.5s ease-in-out infinite" : "none",
+                  }}
+                  onClick={toggleListening}
+                  title={isListening ? "Stop listening" : "Start voice input"}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="9" y="1" width="6" height="12" rx="3" />
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+                    <line x1="12" y1="19" x2="12" y2="23" />
+                    <line x1="8" y1="23" x2="16" y2="23" />
+                  </svg>
+                </button>
+                <button
+                  style={{ ...styles.sendBtn, opacity: input.trim() && !isLoading ? 1 : 0.4 }}
+                  onClick={() => { if (isListening) recognitionRef.current?.stop(); handleSend(); }}
+                  disabled={!input.trim() || isLoading}
+                >
+                  ↑
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
