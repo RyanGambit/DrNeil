@@ -1985,31 +1985,81 @@ export default function AskDrFleshner() {
 
 
   // ── DOWNLOAD VISIT SUMMARY ──
-  // Triggered by the Session Complete Card. Produces a markdown file the
-  // patient can save locally. PDF rendering would require a new dep
-  // (jsPDF / html2pdf) — markdown ships now, upgrade later if needed.
+  // Produces a Rich Text Format (.rtf) file the patient can double-click
+  // to open in Word, Pages, Google Docs, or any phone reader. No npm
+  // dependency needed — RTF is a string-built format and is supported
+  // universally. Can upgrade to true .docx (via the `docx` package)
+  // later if we want finer control over styling.
   const downloadVisitSummary = () => {
     if (!soapNote) return;
     const patientName = patientData?.name || `${firstName} ${lastName}`.trim() || "Patient";
     const dateStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
     const conditionLabel = CONDITION_LABELS[detectedCondition] || "Urology";
+    const prettyDate = new Date().toLocaleDateString("en-CA");
 
-    const header = [
-      "# AskDrFleshner — Visit Summary",
-      "",
-      `**Patient:** ${patientName}`,
-      `**Date:** ${new Date().toLocaleDateString("en-CA")}`,
-      `**Consultation:** ${conditionLabel}`,
-      "",
-      "---",
-      "",
-    ].join("\n");
-    const body = header + soapNote;
+    // RTF needs escaping for \, {, } — plus any non-ASCII character
+    // becomes \uNNNN? using a signed 16-bit code point.
+    const rtfEscape = (s) => {
+      if (!s) return "";
+      let out = "";
+      for (const ch of s) {
+        if (ch === "\\" || ch === "{" || ch === "}") {
+          out += "\\" + ch;
+        } else if (ch === "\n") {
+          out += "\\line ";
+        } else {
+          const code = ch.codePointAt(0);
+          if (code < 128) {
+            out += ch;
+          } else {
+            const signed = code > 32767 ? code - 65536 : code;
+            out += "\\u" + signed + "?";
+          }
+        }
+      }
+      return out;
+    };
+
+    // Turn the SOAP note (plain text) into RTF body content.
+    // Heading lines like "S (Subjective):" → bold, larger font.
+    // Lines starting with "- " → indented bullet paragraph.
+    // Blank lines → paragraph break.
+    // Other lines → regular paragraph.
+    const bodyLines = soapNote.split("\n");
+    const bodyRtf = bodyLines.map((raw) => {
+      const line = raw.trim();
+      if (!line) return "\\par ";
+      const isHeading = /^[SOAP]\s*\([A-Za-z]/i.test(line) || /^[A-Z][A-Z\s]+:$/.test(line);
+      if (isHeading) {
+        return "\\par\\fs26\\b " + rtfEscape(line) + "\\b0\\fs22\\par ";
+      }
+      if (line.startsWith("- ") || line.startsWith("• ")) {
+        const content = line.replace(/^[-•]\s+/, "");
+        return "\\li360\\fi-200\\bullet\\tab " + rtfEscape(content) + "\\li0\\fi0\\par ";
+      }
+      return rtfEscape(line) + "\\par ";
+    }).join("");
+
+    const titleRtf =
+      "\\fs36\\b " + rtfEscape("AskDrFleshner — Visit Summary") + "\\b0\\fs22\\par\\par " +
+      "\\b " + rtfEscape("Patient:") + "\\b0  " + rtfEscape(patientName) + "\\par " +
+      "\\b " + rtfEscape("Date:") + "\\b0  " + rtfEscape(prettyDate) + "\\par " +
+      "\\b " + rtfEscape("Consultation:") + "\\b0  " + rtfEscape(conditionLabel) + "\\par\\par " +
+      "\\brdrb\\brdrs\\brdrw10 \\par ";
+
+    // Calibri 11pt (\fs22 in RTF half-points).
+    const rtf =
+      "{\\rtf1\\ansi\\ansicpg1252\\deff0 " +
+      "{\\fonttbl{\\f0\\fswiss Calibri;}}" +
+      "\\f0\\fs22 " +
+      titleRtf +
+      bodyRtf +
+      "}";
 
     const safeName = patientName.replace(/[^a-zA-Z0-9-]+/g, "_");
-    const filename = `AskDrFleshner_Visit_Summary_${safeName}_${dateStr}.md`;
+    const filename = `AskDrFleshner_Visit_Summary_${safeName}_${dateStr}.rtf`;
 
-    const blob = new Blob([body], { type: "text/markdown;charset=utf-8" });
+    const blob = new Blob([rtf], { type: "application/rtf" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
