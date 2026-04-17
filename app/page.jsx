@@ -3,22 +3,26 @@
 import { useState, useRef, useEffect } from "react";
 import ED_QUESTION_REGISTRY from "../prompts/ed-question-registry";
 import BPH_QUESTION_REGISTRY from "../prompts/bph-question-registry";
+import MH_QUESTION_REGISTRY from "../prompts/mh-question-registry";
 
 // Condition-scoped registries. IDs can collide across conditions
-// (both ED and BPH have "opening-safety-screen", for example) but the
-// questions and chips differ, so every lookup MUST pass the condition.
+// (e.g., all three have "opening-safety-screen", "intake-confirm", etc.)
+// but the questions and chips differ, so every lookup MUST pass the
+// condition.
 const REGISTRIES = {
   ed: ED_QUESTION_REGISTRY,
   bph: BPH_QUESTION_REGISTRY,
+  mh: MH_QUESTION_REGISTRY,
 };
 
 function getRegistry(condition) {
   return REGISTRIES[condition] || null;
 }
 
-// Phase labels by condition. Phases 1-7 roughly track the consult arc but
-// the clinical content behind each phase differs between conditions (e.g.
-// ED phase 5 = CV screen; BPH phase 5 = outcome determination).
+// Phase labels by condition. The phase numbers roughly track the consult
+// arc but the clinical content behind each phase differs between conditions
+// (e.g. ED phase 5 = CV screen; BPH phase 5 = outcome determination;
+// MH phase 5 = outcome delivery — there's no safety gate in MH).
 const PHASE_LABELS_BY_CONDITION = {
   ed: {
     1: "Getting started",
@@ -37,6 +41,13 @@ const PHASE_LABELS_BY_CONDITION = {
     5: "Making the plan",
     6: "Final safety checks",
     7: "Wrapping up",
+  },
+  mh: {
+    1: "Getting started",
+    2: "Background questions",
+    3: "Risk factor check",
+    4: "Understanding your situation",
+    5: "Wrapping up",
   },
 };
 
@@ -393,7 +404,9 @@ const NON_COMMITTAL_RE = /^(not sure|maybe|i don['']?t know|idk|unsure|don['']?t
 function isTerminalMessage(text) {
   if (!text) return false;
   return (
-    /\[Schedule (Follow-Up|In-Person Visit|Testing)\]/i.test(text) ||
+    // Schedule links (Outcome A/B closes). "Tests" (plural) for MH,
+    // "Testing" for ED/BPH — keep both.
+    /\[Schedule (Follow-Up|In-Person Visit|Testing|Tests)\]/i.test(text) ||
     /Take care[,!\s]/i.test(text) ||
     /stop the pill and go to the ER/i.test(text) ||
     /(get you|let'?s get you|you should get) scheduled (for|in) (an?\s+)?in[- ]person/i.test(text) ||
@@ -496,7 +509,7 @@ function parseConfirmFields(messageText) {
 function getDisplayText(msg, condition, messages, index) {
   if (msg.role !== "assistant") return msg.text;
   // Only ED and BPH have registry-driven stripping; other conditions pass through.
-  if (condition !== "ed" && condition !== "bph") return msg.text;
+  if (condition !== "ed" && condition !== "bph" && condition !== "mh") return msg.text;
   const entry = resolveEntry(msg, messages, index, condition);
 
   if (entry?.type === "confirm-panel") {
@@ -2279,7 +2292,7 @@ export default function AskDrFleshner() {
                       <div style={styles.bubbleText} dangerouslySetInnerHTML={{ __html: renderMarkdown(getDisplayText(msg, detectedCondition, displayMessages, i)) }} />
                     </div>
                   </div>
-                  {msg.role === "assistant" && !sessionEnded && (detectedCondition === "ed" || detectedCondition === "bph") && (() => {
+                  {msg.role === "assistant" && !sessionEnded && (detectedCondition === "ed" || detectedCondition === "bph" || detectedCondition === "mh") && (() => {
                     // Registry-driven: look up the AI-supplied qid marker.
                     // Three fallback layers: (1) direct marker, (2) text match
                     // against registry question, (3) contextual — if patient's
@@ -2402,7 +2415,7 @@ export default function AskDrFleshner() {
 
               let pct = 0;
               let label = "";
-              const hasRegistry = detectedCondition === "ed" || detectedCondition === "bph";
+              const hasRegistry = detectedCondition === "ed" || detectedCondition === "bph" || detectedCondition === "mh";
 
               if (isTerminal) {
                 pct = 100;
