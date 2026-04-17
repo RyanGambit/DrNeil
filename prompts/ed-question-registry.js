@@ -747,6 +747,13 @@ const ED_QUESTION_REGISTRY = [
     id: "outcome-b-ack-1",
     phase: 7,
     question: null,
+    fingerprints: [
+      "sound good so far",
+      "start you on sildenafil",
+      "start you on tadalafil",
+      "30-60 minutes before sex",
+      "take it at the same time each",
+    ],
     chips: ["Got it", "I have a question"],
     layout: "horizontal",
     condition: "outcome_b_medication_chosen",
@@ -755,12 +762,18 @@ const ED_QUESTION_REGISTRY = [
       "Got it": "continue_to_message_2",
       "I have a question": "answer_then_continue"
     },
-    notes: "After Message 1 (the medication). AI waits for acknowledgment."
+    notes: "After Message 1 (the medication). AI waits for acknowledgment. Fingerprints used as text-match fallback when marker drops."
   },
   {
     id: "outcome-b-ack-2",
     phase: 7,
     question: null,
+    fingerprints: [
+      "any questions about that",
+      "headache or feeling flushed",
+      "headache, back or muscle aches",
+      "most common side effect",
+    ],
     chips: ["Makes sense", "I have a question"],
     layout: "horizontal",
     condition: "outcome_b_message_1_acknowledged",
@@ -769,7 +782,7 @@ const ED_QUESTION_REGISTRY = [
       "Makes sense": "continue_to_message_3",
       "I have a question": "answer_then_continue"
     },
-    notes: "After Message 2 (what to expect). AI waits for acknowledgment."
+    notes: "After Message 2 (what to expect). AI waits for acknowledgment. Fingerprints used as text-match fallback when marker drops."
   },
 
 ];

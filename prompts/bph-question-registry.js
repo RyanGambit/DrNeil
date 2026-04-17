@@ -442,6 +442,12 @@ const BPH_QUESTION_REGISTRY = [
     id: "outcome-medication-willingness",
     phase: 5,
     question: null,
+    fingerprints: [
+      "would that be worth trying",
+      "worth trying",
+      "daily pill could help",
+      "if a daily pill",
+    ],
     chips: ["Yes, worth trying", "No, I'd rather not"],
     layout: "horizontal",
     condition: "wants_improvement",
@@ -450,7 +456,7 @@ const BPH_QUESTION_REGISTRY = [
       "Yes, worth trying": "proceed_to_safety_gate",
       "No, I'd rather not": "deliver_outcome_a"
     },
-    notes: "AI delivers contextually: 'If a daily pill could help with [their main complaint] — but might cause some mild side effects like dizziness or changes during sex — would that be worth trying?' Question text varies based on patient's complaint, so question field is null. Marker still required."
+    notes: "AI delivers contextually: 'If a daily pill could help with [their main complaint] — but might cause some mild side effects like dizziness or changes during sex — would that be worth trying?' Question text varies based on patient's complaint, so question field is null. Marker still required. Fingerprints used as text-match fallback when marker drops."
   },
 
   // =========================================================================
@@ -495,6 +501,12 @@ const BPH_QUESTION_REGISTRY = [
     id: "outcome-b-ack-1",
     phase: 7,
     question: null,
+    fingerprints: [
+      "sound good so far",
+      "tamsulosin 0.4mg",
+      "take it at bedtime",
+      "going to start you on tamsulosin",
+    ],
     chips: ["Got it", "I have a question"],
     layout: "horizontal",
     condition: "outcome_b_eligible",
@@ -503,12 +515,18 @@ const BPH_QUESTION_REGISTRY = [
       "Got it": "continue_to_message_2",
       "I have a question": "answer_then_continue"
     },
-    notes: "After Message 1 (the medication — tamsulosin 0.4mg, bedtime, how it works). AI waits for acknowledgment."
+    notes: "After Message 1 (the medication — tamsulosin 0.4mg, bedtime, how it works). AI waits for acknowledgment. Fingerprints used as text-match fallback when marker drops."
   },
   {
     id: "outcome-b-ack-2",
     phase: 7,
     question: null,
+    fingerprints: [
+      "any questions about that",
+      "less fluid when you finish",
+      "lightheadedness when you change positions",
+      "bedtime dosing",
+    ],
     chips: ["Makes sense", "I have a question"],
     layout: "horizontal",
     condition: "outcome_b_message_1_acknowledged",
@@ -517,7 +535,7 @@ const BPH_QUESTION_REGISTRY = [
       "Makes sense": "continue_to_message_3",
       "I have a question": "answer_then_continue"
     },
-    notes: "After Message 2 (side effects — lightheadedness, reduced ejaculate, reversible). AI waits for acknowledgment."
+    notes: "After Message 2 (side effects — lightheadedness, reduced ejaculate, reversible). AI waits for acknowledgment. Fingerprints used as text-match fallback when marker drops."
   },
 
 ];

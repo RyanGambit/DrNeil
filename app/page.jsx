@@ -340,27 +340,41 @@ function getRegistryEntry(qid, condition) {
 }
 
 // FALLBACK: if the AI forgets the qid marker, try to recover by matching
-// the AI message text against registry question text. Only runs when the
-// marker is missing. Uses the LAST question sentence from each registry
-// entry as the needle, trimmed and lowercased for robustness. Scoped to
-// the active condition's registry so BPH messages can't match ED entries.
+// the AI message text against registry text. Only runs when the marker is
+// missing. Scoped to the active condition's registry so BPH messages can't
+// match ED entries.
+//
+// Two match modes:
+//   1. For entries with a predefined `question` field, use the last
+//      question-marked line as the needle (full-text match).
+//   2. For contextual entries (question: null — e.g., outcome-b-ack-1,
+//      outcome-medication-willingness), use the `fingerprints` array of
+//      distinctive phrases. Any fingerprint hit is enough.
+// In both cases longer needles/fingerprints are preferred (more specific).
 function detectQidFromText(messageText, condition) {
   if (!messageText) return null;
   const registry = getRegistry(condition);
   if (!registry) return null;
   const lower = messageText.toLowerCase();
-  // Prefer LONGER needles first — they're more specific
-  const candidates = registry
-    .filter((e) => e.question)
-    .map((e) => {
-      // Take the last line ending in "?" from the question text
+
+  const candidates = [];
+
+  for (const e of registry) {
+    if (e.question) {
       const lines = e.question.split("\n").map((l) => l.trim()).filter(Boolean);
       const qLine = lines.reverse().find((l) => l.includes("?")) || lines[0] || "";
-      return { id: e.id, needle: qLine.toLowerCase() };
-    })
-    .filter((c) => c.needle.length >= 15)
-    .sort((a, b) => b.needle.length - a.needle.length);
+      const needle = qLine.toLowerCase();
+      if (needle.length >= 15) candidates.push({ id: e.id, needle });
+    }
+    if (Array.isArray(e.fingerprints)) {
+      for (const fp of e.fingerprints) {
+        const needle = String(fp).toLowerCase();
+        if (needle.length >= 10) candidates.push({ id: e.id, needle });
+      }
+    }
+  }
 
+  candidates.sort((a, b) => b.needle.length - a.needle.length);
   for (const c of candidates) {
     if (lower.includes(c.needle)) return c.id;
   }
