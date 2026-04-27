@@ -684,7 +684,7 @@ const ED_QUESTION_REGISTRY = [
   {
     id: "sg-q3-alpha-blocker",
     phase: 6,
-    question: "Are you taking tamsulosin or any pill for prostate or urinary symptoms?",
+    question: "Are you taking any pill for prostate or urinary symptoms — like tamsulosin or Flomax?",
     chips: ["No", "Yes"],
     layout: "horizontal",
     condition: "cv_screen_passed",

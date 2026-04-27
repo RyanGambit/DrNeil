@@ -333,7 +333,7 @@ const MH_QUESTION_REGISTRY = [
   {
     id: "risk-q7-chemo",
     phase: 3,
-    question: "Have you ever had chemotherapy — specifically a drug called cyclophosphamide or ifosfamide?",
+    question: "Have you ever had chemotherapy — specifically a drug called cyclophosphamide (sometimes called Cytoxan) or ifosfamide?",
     chips: ["No", "Yes", "I've had chemo but don't know the drug"],
     layout: "horizontal",
     condition: null,

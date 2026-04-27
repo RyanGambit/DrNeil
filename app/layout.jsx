@@ -24,8 +24,29 @@ export default function RootLayout({ children }) {
           }
           input:focus, textarea:focus {
             border-color: #1A6B5B !important;
+            outline: 2px solid #1A6B5B;
+            outline-offset: 1px;
           }
-          ::placeholder { color: #547C72; }
+          button:focus-visible,
+          [role="button"]:focus-visible,
+          [role="radio"]:focus-visible,
+          a:focus-visible {
+            outline: 3px solid #1A6B5B;
+            outline-offset: 2px;
+            border-radius: 4px;
+          }
+          ::placeholder { color: #506D65; opacity: 1; }
+          .sr-only {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+          }
           ::-webkit-scrollbar { width: 6px; }
           ::-webkit-scrollbar-track { background: transparent; }
           ::-webkit-scrollbar-thumb { background: #D8F0EA; border-radius: 3px; }

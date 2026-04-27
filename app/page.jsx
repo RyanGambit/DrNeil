@@ -684,16 +684,16 @@ export default function AskDrFleshner() {
                 }}>{f.value}</div>
               </div>
               <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-                <button onClick={() => setResponse(i, "ok")} style={{
-                  padding: "7px 16px", borderRadius: 8, fontSize: T.fontSmall,
+                <button type="button" onClick={() => setResponse(i, "ok")} aria-pressed={isConfirmed} aria-label={`Mark ${f.label} as correct`} style={{
+                  padding: "10px 18px", minHeight: 44, borderRadius: 8, fontSize: T.fontSmall,
                   fontWeight: 600, fontFamily: T.font, cursor: "pointer",
                   border: `1.5px solid ${isConfirmed ? T.confirmCorrect : T.chipBorder}`,
                   background: isConfirmed ? T.accentSoft : T.surface,
                   color: isConfirmed ? T.confirmCorrect : T.textSecondary,
                   transition: "all 0.15s ease",
                 }}>{isConfirmed ? "✓ Correct" : "Correct"}</button>
-                <button onClick={() => setResponse(i, "flag")} style={{
-                  padding: "7px 16px", borderRadius: 8, fontSize: T.fontSmall,
+                <button type="button" onClick={() => setResponse(i, "flag")} aria-pressed={isFlagged} aria-label={`Flag ${f.label} as incorrect`} style={{
+                  padding: "10px 18px", minHeight: 44, borderRadius: 8, fontSize: T.fontSmall,
                   fontWeight: 600, fontFamily: T.font, cursor: "pointer",
                   border: `1.5px solid ${isFlagged ? T.confirmFlag : T.chipBorder}`,
                   background: isFlagged ? T.confirmFlagBg : T.surface,
@@ -709,8 +709,8 @@ export default function AskDrFleshner() {
             padding: "12px 18px", borderTop: `1px solid ${T.borderLight}`,
             display: "flex", justifyContent: "flex-end",
           }}>
-            <button onClick={handleSubmit} style={{
-              padding: "10px 28px", borderRadius: 10, border: "none",
+            <button type="button" onClick={handleSubmit} style={{
+              padding: "12px 28px", minHeight: 44, borderRadius: 10, border: "none",
               background: T.accent, color: "#fff", fontSize: T.fontSmall,
               fontWeight: 600, fontFamily: T.font, cursor: "pointer",
               boxShadow: "0 2px 4px rgba(15,123,108,0.2)",
@@ -747,10 +747,10 @@ export default function AskDrFleshner() {
         {chips && !scored && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {chips.map((chip, i) => (
-              <button key={i} onClick={() => handleChipTap(chip)} style={{
-                padding: "10px 22px", borderRadius: 22,
+              <button key={i} type="button" onClick={() => handleChipTap(chip)} style={{
+                padding: "12px 22px", minHeight: 44, borderRadius: 22,
                 border: `1.5px solid ${T.chipBorder}`, background: "#fff",
-                color: T.text, fontSize: 14, fontWeight: 500, fontFamily: T.font,
+                color: T.text, fontSize: 15, fontWeight: 500, fontFamily: T.font,
                 cursor: "pointer", boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
                 lineHeight: 1.3, transition: "all 0.15s ease",
               }}
@@ -767,21 +767,21 @@ export default function AskDrFleshner() {
               const letter = String.fromCharCode(97 + i);
               const cleanLabel = chip.replace(/^[a-g]\)\s*/i, "");
               return (
-                <button key={i} onClick={() => handleChipTap(chip)} style={{
+                <button key={i} type="button" onClick={() => handleChipTap(chip)} aria-label={`Option ${letter.toUpperCase()}: ${cleanLabel}`} style={{
                   display: "flex", alignItems: "center", gap: 12,
-                  padding: "10px 14px", borderRadius: 12,
+                  padding: "12px 14px", minHeight: 44, borderRadius: 12,
                   border: `1.5px solid ${T.chipBorder}`, background: "#fff",
-                  color: T.text, fontSize: 14, fontWeight: 450, fontFamily: T.font,
+                  color: T.text, fontSize: 15, fontWeight: 500, fontFamily: T.font,
                   cursor: "pointer", textAlign: "left",
                   boxShadow: "0 1px 2px rgba(0,0,0,0.04)", transition: "all 0.15s ease",
                 }}
                 onMouseEnter={(e) => { e.currentTarget.style.borderColor = T.accent; e.currentTarget.style.background = T.accentSoft; }}
                 onMouseLeave={(e) => { e.currentTarget.style.borderColor = T.chipBorder; e.currentTarget.style.background = "#fff"; }}
                 >
-                  <span style={{
-                    width: 26, height: 26, borderRadius: 7, flexShrink: 0,
+                  <span aria-hidden="true" style={{
+                    width: 28, height: 28, borderRadius: 7, flexShrink: 0,
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 12, fontWeight: 700, background: "#f0f2f5", color: T.textMuted,
+                    fontSize: 13, fontWeight: 700, background: "#e3e7ec", color: "#5a6175",
                   }}>{letter}</span>
                   {cleanLabel}
                 </button>
@@ -790,7 +790,7 @@ export default function AskDrFleshner() {
           </div>
         )}
         <div style={{
-          fontSize: 11, color: T.textMuted, marginTop: 10, textAlign: "center",
+          fontSize: 13, color: "#5a6175", marginTop: 10, textAlign: "center",
           fontFamily: T.font,
         }}>You can also type a response below</div>
       </div>
@@ -974,10 +974,10 @@ export default function AskDrFleshner() {
             }),
           });
           const data = await response.json();
-          setSoapNote(data.note || "Unable to generate visit summary. Please try again.");
+          setSoapNote(data.note || "We couldn't prepare your visit summary right now. Our team has a copy on file — please reach out if you'd like one sent to you.");
         } catch (err) {
           console.error("SOAP generation error:", err);
-          setSoapNote("Error generating visit summary. Please try again.");
+          setSoapNote("We couldn't prepare your visit summary right now. Our team has a copy on file — please reach out if you'd like one sent to you.");
         } finally {
           setSoapLoading(false);
         }
@@ -1071,8 +1071,9 @@ export default function AskDrFleshner() {
               </p>
 
               <div style={styles.formGroup}>
-                <label style={styles.label}>First Name</label>
+                <label htmlFor="welcome-first-name" style={styles.label}>First Name</label>
                 <input
+                  id="welcome-first-name"
                   style={styles.input}
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
@@ -1080,8 +1081,9 @@ export default function AskDrFleshner() {
                 />
               </div>
               <div style={styles.formGroup}>
-                <label style={styles.label}>Last Name</label>
+                <label htmlFor="welcome-last-name" style={styles.label}>Last Name</label>
                 <input
+                  id="welcome-last-name"
                   style={styles.input}
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
@@ -1090,6 +1092,7 @@ export default function AskDrFleshner() {
               </div>
 
               <button
+                type="button"
                 style={{
                   ...styles.primaryBtn,
                   opacity: firstName && lastName ? 1 : 0.4,
@@ -1368,7 +1371,7 @@ export default function AskDrFleshner() {
               AskDr<span style={{ color: "#3D5D80" }}>Fleshner</span>
             </span>
           </div>
-          <button style={styles.backBtn} onClick={() => setStep("welcome")}>{isMobile ? "← Back" : "← Back to Home"}</button>
+          <button type="button" style={styles.backBtn} onClick={() => setStep("welcome")}>{isMobile ? "← Back" : "← Back to Home"}</button>
         </header>
 
         {/* ── CONTENT ── */}
@@ -1389,7 +1392,9 @@ export default function AskDrFleshner() {
               { key: "build", label: "Build Your Own" },
             ].map(tab => (
               <button
+                type="button"
                 key={tab.key}
+                aria-pressed={uploadMode === tab.key}
                 onClick={() => { setUploadMode(tab.key); setPatientData(null); setFileUploaded(false); }}
                 style={{
                   flex: 1, padding: "12px 8px", border: "none", cursor: "pointer",
@@ -1468,6 +1473,8 @@ export default function AskDrFleshner() {
                             }}>{sc.condition === "unknown" ? "Unclassified" : sc.condition.toUpperCase()}</span>
                             {isSelected && <span style={{ fontSize: 13, color: "#1A6B5B", fontWeight: 600 }}>Selected ✓</span>}
                             <button
+                              type="button"
+                              aria-label={`Delete scenario ${sc.name || ""}`}
                               onClick={(e) => {
                                 e.stopPropagation();
                                 setCustomScenarios(prev => prev.filter(s => s.id !== sc.id));
@@ -1576,7 +1583,9 @@ export default function AskDrFleshner() {
                 <div style={{ display: "flex", gap: 8 }}>
                   {["bph", "ed", "mh"].map(c => (
                     <button
+                      type="button"
                       key={c}
+                      aria-pressed={buildCondition === c}
                       onClick={() => { setBuildCondition(c); setBuildForm({}); setPatientData(null); setFileUploaded(false); }}
                       style={{
                         flex: 1, padding: "10px 8px", borderRadius: 8, cursor: "pointer",
@@ -1593,6 +1602,7 @@ export default function AskDrFleshner() {
               </div>
               {/* AI Generate button */}
               <button
+                type="button"
                 onClick={aiGeneratePatient}
                 disabled={aiGenerating}
                 style={{
@@ -1702,6 +1712,7 @@ export default function AskDrFleshner() {
               </div>
               {/* Apply button */}
               <button
+                type="button"
                 onClick={applyBuildForm}
                 disabled={!buildForm.name || !buildForm.age}
                 style={{
@@ -1841,6 +1852,7 @@ export default function AskDrFleshner() {
           )}
 
           <button
+            type="button"
             style={{
               ...styles.primaryBtn,
               opacity: patientData ? 1 : 0.4,
@@ -1908,7 +1920,7 @@ export default function AskDrFleshner() {
                 </span>
                 <span style={{
                   ...styles.waitingStepLabel,
-                  color: i <= waitingStep ? "#1F2937" : "#547C72",
+                  color: i <= waitingStep ? "#1F2937" : "#3F5851",
                   fontWeight: i === waitingStep ? 600 : 400,
                 }}>
                   {ws.label}
@@ -2199,6 +2211,8 @@ export default function AskDrFleshner() {
                         type="email"
                       />
                       <button
+                        type="button"
+                        aria-label="Send SOAP note to physician"
                         style={{
                           ...styles.primaryBtn,
                           width: "auto",
@@ -2220,6 +2234,7 @@ export default function AskDrFleshner() {
               </div>
 
               <button
+                type="button"
                 style={{
                   ...styles.backBtn,
                   marginTop: 20,
@@ -2240,6 +2255,7 @@ export default function AskDrFleshner() {
 
   return (
     <div style={{ height: "100vh", display: "flex", flexDirection: "column", background: "#F5FBF9" }}>
+      <h1 className="sr-only">Virtual Consultation with Dr. Neil Fleshner</h1>
       {/* Header */}
       <div style={{ ...styles.chatHeader, padding: isMobile ? "10px 12px" : "14px 20px", gap: isMobile ? 8 : 12 }}>
         <img src={DR_AVATAR} alt="Dr. Fleshner" style={{ ...styles.chatAvatar, width: isMobile ? 36 : 44, height: isMobile ? 36 : 44 }} />
@@ -2250,31 +2266,35 @@ export default function AskDrFleshner() {
           </p>
         </div>
         <button
+          type="button"
+          aria-label={dashboardOpen ? "Hide patient dashboard" : "Show patient dashboard"}
+          aria-expanded={dashboardOpen}
           style={{
             ...styles.endConsultBtn,
             background: "transparent",
             border: "1.5px solid #506D65",
             color: "#506D65",
             marginRight: isMobile ? 4 : 8,
-            padding: isMobile ? "6px 10px" : "8px 14px",
-            fontSize: isMobile ? 11 : 13,
+            padding: isMobile ? "8px 12px" : "10px 14px",
+            minHeight: 44,
+            fontSize: isMobile ? 12 : 13,
           }}
           onClick={() => setDashboardOpen(!dashboardOpen)}
         >
           {isMobile ? (dashboardOpen ? "✕" : "📊") : (dashboardOpen ? "Hide" : "Show") + " Dashboard"}
         </button>
         {messages.length >= 2 && (
-          <button style={{ ...styles.endConsultBtn, padding: isMobile ? "6px 10px" : "8px 14px", fontSize: isMobile ? 11 : 13 }} onClick={endConsultation} disabled={isLoading}>
+          <button type="button" aria-label="End consultation and generate visit summary" style={{ ...styles.endConsultBtn, padding: isMobile ? "8px 12px" : "10px 14px", minHeight: 44, fontSize: isMobile ? 12 : 13 }} onClick={endConsultation} disabled={isLoading}>
             {isMobile ? "End" : "End & Generate SOAP"}
           </button>
         )}
       </div>
 
       {/* Main area: Chat + Dashboard */}
-      <div style={{ flex: 1, display: "flex", overflow: "hidden", position: "relative" }}>
+      <main role="main" aria-label="Consultation" style={{ flex: 1, display: "flex", overflow: "hidden", position: "relative" }}>
         {/* Chat column */}
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
-          <div style={styles.chatMessages}>
+          <div style={styles.chatMessages} role="log" aria-live="polite" aria-atomic="false" aria-label="Conversation with Dr. Fleshner">
             {displayMessages.length === 0 && !isLoading && (
               <div style={styles.chatWelcomeMsg}>
                 <p style={{ margin: 0, color: "#506D65", fontSize: 17 }}>Starting your consultation...</p>
@@ -2366,6 +2386,8 @@ export default function AskDrFleshner() {
                       : "We couldn't prepare the visit summary. You can still leave the page — we have a copy on file."}
                 </p>
                 <button
+                  type="button"
+                  aria-label="Download visit summary"
                   onClick={downloadVisitSummary}
                   disabled={!soapNote || soapLoading}
                   style={{
@@ -2489,7 +2511,10 @@ export default function AskDrFleshner() {
               </div>
             ) : (
               <div style={styles.inputRow}>
+                <label htmlFor="chat-input" className="sr-only">Type your reply to Dr. Fleshner</label>
                 <textarea
+                  id="chat-input"
+                  aria-label="Type your reply to Dr. Fleshner"
                   style={styles.chatInput}
                   value={input}
                   onChange={(e) => { setInput(e.target.value); }}
@@ -2498,8 +2523,12 @@ export default function AskDrFleshner() {
                   rows={1}
                 />
                 <button
+                  type="button"
+                  aria-label={isListening ? "Stop voice input" : "Start voice input"}
+                  aria-pressed={isListening}
                   style={{
                     ...styles.micBtn,
+                    width: 44, height: 44,
                     background: isListening ? "#DC2626" : "#F5FBF9",
                     borderColor: isListening ? "#DC2626" : "#D8F0EA",
                     color: isListening ? "#FFFFFF" : "#506D65",
@@ -2508,7 +2537,7 @@ export default function AskDrFleshner() {
                   onClick={toggleListening}
                   title={isListening ? "Stop listening" : "Start voice input"}
                 >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <rect x="9" y="1" width="6" height="12" rx="3" />
                     <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
                     <line x1="12" y1="19" x2="12" y2="23" />
@@ -2516,11 +2545,13 @@ export default function AskDrFleshner() {
                   </svg>
                 </button>
                 <button
-                  style={{ ...styles.sendBtn, opacity: input.trim() && !isLoading ? 1 : 0.4 }}
+                  type="button"
+                  aria-label="Send message"
+                  style={{ ...styles.sendBtn, width: 44, height: 44, opacity: input.trim() && !isLoading ? 1 : 0.4 }}
                   onClick={() => { if (isListening) recognitionRef.current?.stop(); handleSend(); }}
                   disabled={!input.trim() || isLoading}
                 >
-                  ↑
+                  <span aria-hidden="true">↑</span>
                 </button>
               </div>
             )}
@@ -2743,7 +2774,7 @@ export default function AskDrFleshner() {
             )}
           </div>
         )}
-      </div>
+      </main>
     </div>
   );
 }
@@ -2887,7 +2918,7 @@ const styles = {
   },
   disclaimer: {
     fontSize: 13,
-    color: "#547C72",
+    color: "#3F5851",
     textAlign: "center",
     marginTop: 20,
     lineHeight: 1.5,

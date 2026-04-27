@@ -480,7 +480,7 @@ const BPH_QUESTION_REGISTRY = [
   {
     id: "sg-q2-cataract",
     phase: 6,
-    question: "Are you having any eye surgery planned — like cataract surgery?",
+    question: "One last thing — the medication I'd start you on can interact with eye surgery, so we always check this. Are you having any eye surgery planned — like cataract surgery?",
     chips: ["No, nothing planned", "Yes, within the next 6 months", "Yes, but more than 6 months away"],
     layout: "horizontal",
     condition: "heading_toward_outcome_b",
