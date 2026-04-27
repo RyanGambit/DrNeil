@@ -1398,12 +1398,15 @@ export default function AskDrFleshner() {
                 onClick={() => { setUploadMode(tab.key); setPatientData(null); setFileUploaded(false); }}
                 style={{
                   flex: 1, padding: "12px 8px", border: "none", cursor: "pointer",
-                  fontSize: 14, fontWeight: 600, fontFamily: "'Helvetica Neue', Arial, sans-serif",
+                  fontSize: 14, fontWeight: uploadMode === tab.key ? 700 : 600, fontFamily: "'Helvetica Neue', Arial, sans-serif",
                   background: uploadMode === tab.key ? "#1A6B5B" : "#FFFFFF",
                   color: uploadMode === tab.key ? "#FFFFFF" : "#506D65",
+                  borderBottom: uploadMode === tab.key ? "3px solid #0E4B3F" : "3px solid transparent",
                   transition: "all 0.2s",
+                  display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6,
                 }}
               >
+                {uploadMode === tab.key && <span aria-hidden="true">✓</span>}
                 {tab.label}
               </button>
             ))}
