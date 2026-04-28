@@ -659,6 +659,10 @@ export default function AskDrFleshner() {
   // resolve back to the same testerId server-side (Phase 2).
   const [testerId, setTesterId] = useState(null);
   const [completedScenarios, setCompletedScenarios] = useState([]);
+  // Active session id for the current scenario run. Set when launchChat
+  // calls /api/sessions/start; used by the session-end watcher to mark
+  // the session complete in KV.
+  const [currentSessionId, setCurrentSessionId] = useState(null);
   const [buildCondition, setBuildCondition] = useState("bph");
   const [buildForm, setBuildForm] = useState({});
   const [aiGenerating, setAiGenerating] = useState(false);
@@ -1081,12 +1085,26 @@ export default function AskDrFleshner() {
 
     setSessionEnded(true);
 
-    // Track scenario completion for tester mode (in-session for Phase 1;
-    // Phase 2 hydrates from KV so the badge persists across browser restarts).
+    // Track scenario completion for tester mode — both in local state
+    // (immediate UI update) and in KV (persists across browser restarts).
     if (userMode === "tester" && patientData?.name) {
       const sc = SCENARIO_DB.find(s => s.data.name === patientData.name);
       if (sc) {
         setCompletedScenarios(prev => prev.includes(sc.id) ? prev : [...prev, sc.id]);
+      }
+      // Mark the KV session record complete. Idempotent — safe if the
+      // watcher fires more than once. Best-effort: a KV outage doesn't
+      // block the consultation flow.
+      if (currentSessionId) {
+        fetch("/api/sessions/complete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            sessionId: currentSessionId,
+            turns: messages.length,
+            finalOutcome: lastAssistant.text?.slice(0, 200) || null,
+          }),
+        }).catch((e) => console.warn("sessions/complete failed:", e));
       }
     }
 
@@ -1319,12 +1337,31 @@ export default function AskDrFleshner() {
                     disabled={!firstName || !lastName}
                     onClick={async () => {
                       if (userMode === "tester") {
-                        // Phase 2 will register/lookup the tester here. For now,
-                        // mint a session-local id so downstream code can carry it.
-                        const id = `tester-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-                        setTesterId(id);
-                        // Default a tester to Test Scenarios — that's the
-                        // demo-tester happy path. They can switch to Build Your Own.
+                        // Upsert by name in Vercel KV. Returns the canonical
+                        // testerId (same name = same record) and the list of
+                        // scenarios this tester has previously completed so
+                        // we can hydrate the "✓ Completed" badges.
+                        try {
+                          const res = await fetch("/api/testers/upsert", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ firstName, lastName, role: testerRole || null }),
+                          });
+                          if (res.ok) {
+                            const data = await res.json();
+                            setTesterId(data.tester?.id || null);
+                            setCompletedScenarios(Array.isArray(data.completedScenarios) ? data.completedScenarios : []);
+                          } else {
+                            // Don't block the demo on a KV outage — fall back to
+                            // a session-local id so the rest of the flow still works.
+                            console.warn("testers/upsert failed, using session-local id");
+                            setTesterId(`tester-local-${Date.now()}`);
+                          }
+                        } catch (e) {
+                          console.warn("testers/upsert error, using session-local id", e);
+                          setTesterId(`tester-local-${Date.now()}`);
+                        }
+                        // Default to Test Scenarios — the tester happy path.
                         setUploadMode("scenario");
                       }
                       setStep("upload");
@@ -1525,6 +1562,21 @@ export default function AskDrFleshner() {
 
   const launchChat = () => {
     setStep("chat");
+
+    // Tester mode — record session start in KV so the admin view and the
+    // "Completed" badges have something to read. Best-effort: if KV is
+    // unreachable we still proceed, the consultation just won't be logged.
+    if (userMode === "tester" && testerId) {
+      const scenarioId = SCENARIO_DB.find(s => s.data.name === patientData?.name)?.id || null;
+      fetch("/api/sessions/start", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ testerId, scenarioId, condition: detectedCondition }),
+      })
+        .then((r) => r.ok ? r.json() : null)
+        .then((d) => { if (d?.session?.id) setCurrentSessionId(d.session.id); })
+        .catch((e) => console.warn("sessions/start failed:", e));
+    }
 
     // Build condition-specific patient context
     const d = patientData;
@@ -2816,6 +2868,7 @@ export default function AskDrFleshner() {
                       setClinicalState(null);
                       setPanelStates({});
                       setFileUploaded(false);
+                      setCurrentSessionId(null);
                       initialContextRef.current = "";
                       setStep("upload");
                     }}
