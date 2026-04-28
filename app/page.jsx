@@ -647,6 +647,18 @@ export default function AskDrFleshner() {
   // fired four React errors (#418/#423/#425) on every page load.
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [uploadMode, setUploadMode] = useState("scenario"); // "file" | "scenario" | "build"
+  // userMode is "patient" (the original flow — file upload, build, scenarios)
+  // or "tester" (a clinician/reviewer evaluating the tool — scenarios + build only,
+  // no file upload, with their own identity tracked across runs).
+  // null until the user picks on the welcome screen.
+  const [userMode, setUserMode] = useState(null);
+  const [testerRole, setTesterRole] = useState("");
+  // Stable id for this tester across sessions in this browser. Set when
+  // the tester finishes the welcome form. By-name match means refreshing
+  // the browser will re-show the welcome screen, but the same name will
+  // resolve back to the same testerId server-side (Phase 2).
+  const [testerId, setTesterId] = useState(null);
+  const [completedScenarios, setCompletedScenarios] = useState([]);
   const [buildCondition, setBuildCondition] = useState("bph");
   const [buildForm, setBuildForm] = useState({});
   const [aiGenerating, setAiGenerating] = useState(false);
@@ -1069,6 +1081,15 @@ export default function AskDrFleshner() {
 
     setSessionEnded(true);
 
+    // Track scenario completion for tester mode (in-session for Phase 1;
+    // Phase 2 hydrates from KV so the badge persists across browser restarts).
+    if (userMode === "tester" && patientData?.name) {
+      const sc = SCENARIO_DB.find(s => s.data.name === patientData.name);
+      if (sc) {
+        setCompletedScenarios(prev => prev.includes(sc.id) ? prev : [...prev, sc.id]);
+      }
+    }
+
     // Kick off SOAP generation exactly once, asynchronously.
     if (!soapAutoTriggered) {
       setSoapAutoTriggered(true);
@@ -1174,49 +1195,145 @@ export default function AskDrFleshner() {
               border: "1px solid #D8F0EA",
               boxShadow: "0 2px 16px rgba(26, 107, 91, 0.06)",
             }}>
-              <p style={{
-                fontSize: 15,
-                fontWeight: 600,
-                color: "#1F2937",
-                margin: "0 0 20px",
-                fontFamily: "-apple-system, 'Segoe UI', sans-serif",
-              }}>
-                Enter your details to begin
-              </p>
+              {/* STAGE 1 — Mode select. Shown until the user picks. */}
+              {userMode === null && (
+                <>
+                  <p style={{
+                    fontSize: 15, fontWeight: 600, color: "#1F2937",
+                    margin: "0 0 6px", fontFamily: "-apple-system, 'Segoe UI', sans-serif",
+                  }}>
+                    How are you using AskDrFleshner today?
+                  </p>
+                  <p style={{
+                    fontSize: 13, color: "#506D65",
+                    margin: "0 0 18px", fontFamily: "-apple-system, 'Segoe UI', sans-serif",
+                  }}>
+                    Pick the option that fits — we'll tailor the experience.
+                  </p>
 
-              <div style={styles.formGroup}>
-                <label htmlFor="welcome-first-name" style={styles.label}>First Name</label>
-                <input
-                  id="welcome-first-name"
-                  style={styles.input}
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  placeholder="e.g. Michael"
-                />
-              </div>
-              <div style={styles.formGroup}>
-                <label htmlFor="welcome-last-name" style={styles.label}>Last Name</label>
-                <input
-                  id="welcome-last-name"
-                  style={styles.input}
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  placeholder="e.g. Tran"
-                />
-              </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    {[
+                      { key: "tester",  title: "I'm here to evaluate the tool",
+                        sub: "I'll play through one or more patient scenarios and share feedback." },
+                      { key: "patient", title: "I'm a patient",
+                        sub: "I'd like a virtual consultation with Dr. Fleshner." },
+                    ].map((opt) => (
+                      <button
+                        key={opt.key}
+                        type="button"
+                        aria-label={opt.title}
+                        onClick={() => setUserMode(opt.key)}
+                        style={{
+                          display: "block", textAlign: "left", width: "100%",
+                          padding: "14px 16px", borderRadius: 12,
+                          border: "1.5px solid #D8F0EA", background: "#FFFFFF",
+                          cursor: "pointer", minHeight: 44, fontFamily: "-apple-system, 'Segoe UI', sans-serif",
+                          transition: "all 0.15s ease",
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#1A6B5B"; e.currentTarget.style.background = "#F5FBF9"; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#D8F0EA"; e.currentTarget.style.background = "#FFFFFF"; }}
+                      >
+                        <div style={{ fontSize: 15, fontWeight: 600, color: "#1F2937", marginBottom: 3 }}>
+                          {opt.title}
+                        </div>
+                        <div style={{ fontSize: 13, color: "#506D65", lineHeight: 1.4 }}>
+                          {opt.sub}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
 
-              <button
-                type="button"
-                style={{
-                  ...styles.primaryBtn,
-                  opacity: firstName && lastName ? 1 : 0.4,
-                  cursor: firstName && lastName ? "pointer" : "not-allowed",
-                }}
-                disabled={!firstName || !lastName}
-                onClick={() => setStep("upload")}
-              >
-                Start Your Session
-              </button>
+              {/* STAGE 2 — Identity form. Same fields for both modes;
+                  testers also get an optional role field. */}
+              {userMode !== null && (
+                <>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "0 0 16px" }}>
+                    <p style={{ fontSize: 15, fontWeight: 600, color: "#1F2937", margin: 0, fontFamily: "-apple-system, 'Segoe UI', sans-serif" }}>
+                      {userMode === "tester" ? "Tell us about yourself" : "Enter your details to begin"}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => { setUserMode(null); setTesterRole(""); }}
+                      style={{
+                        background: "transparent", border: "none", color: "#1A6B5B",
+                        fontSize: 13, fontWeight: 600, cursor: "pointer", padding: 4,
+                        fontFamily: "-apple-system, 'Segoe UI', sans-serif",
+                      }}
+                      aria-label="Change selection"
+                    >
+                      ← Back
+                    </button>
+                  </div>
+
+                  <div style={styles.formGroup}>
+                    <label htmlFor="welcome-first-name" style={styles.label}>First Name</label>
+                    <input
+                      id="welcome-first-name"
+                      style={styles.input}
+                      value={firstName}
+                      onChange={(e) => setFirstName(e.target.value)}
+                      placeholder={userMode === "tester" ? "e.g. Sarah" : "e.g. Michael"}
+                      autoComplete="given-name"
+                    />
+                  </div>
+                  <div style={styles.formGroup}>
+                    <label htmlFor="welcome-last-name" style={styles.label}>Last Name</label>
+                    <input
+                      id="welcome-last-name"
+                      style={styles.input}
+                      value={lastName}
+                      onChange={(e) => setLastName(e.target.value)}
+                      placeholder={userMode === "tester" ? "e.g. Chen" : "e.g. Tran"}
+                      autoComplete="family-name"
+                    />
+                  </div>
+
+                  {userMode === "tester" && (
+                    <div style={styles.formGroup}>
+                      <label htmlFor="welcome-role" style={styles.label}>Your role <span style={{ color: "#506D65", fontWeight: 400 }}>(optional)</span></label>
+                      <select
+                        id="welcome-role"
+                        style={{ ...styles.input, cursor: "pointer", appearance: "auto" }}
+                        value={testerRole}
+                        onChange={(e) => setTesterRole(e.target.value)}
+                      >
+                        <option value="">Select…</option>
+                        <option value="urologist">Urologist</option>
+                        <option value="gp">Family physician / GP</option>
+                        <option value="resident">Resident / fellow</option>
+                        <option value="other-clinical">Other clinician</option>
+                        <option value="non-clinical">Non-clinical reviewer</option>
+                      </select>
+                    </div>
+                  )}
+
+                  <button
+                    type="button"
+                    style={{
+                      ...styles.primaryBtn,
+                      opacity: firstName && lastName ? 1 : 0.4,
+                      cursor: firstName && lastName ? "pointer" : "not-allowed",
+                    }}
+                    disabled={!firstName || !lastName}
+                    onClick={async () => {
+                      if (userMode === "tester") {
+                        // Phase 2 will register/lookup the tester here. For now,
+                        // mint a session-local id so downstream code can carry it.
+                        const id = `tester-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+                        setTesterId(id);
+                        // Default a tester to Test Scenarios — that's the
+                        // demo-tester happy path. They can switch to Build Your Own.
+                        setUploadMode("scenario");
+                      }
+                      setStep("upload");
+                    }}
+                  >
+                    Start Your Session
+                  </button>
+                </>
+              )}
             </div>
 
             <p style={{
@@ -1499,12 +1616,15 @@ export default function AskDrFleshner() {
           </div>
 
           {/* ── MODE TABS ── */}
+          {/* Testers don't see the Upload File tab — it's not part of the
+              demo-evaluation flow and the file format isn't documented for
+              external users. Patients keep the full three-tab choice. */}
           <div style={{ display: "flex", gap: 0, marginBottom: 24, borderRadius: 10, overflow: "hidden", border: "1.5px solid #D8F0EA" }}>
             {[
               { key: "scenario", label: "Test Scenarios" },
-              { key: "file", label: "Upload File" },
+              userMode === "tester" ? null : { key: "file", label: "Upload File" },
               { key: "build", label: "Build Your Own" },
-            ].map(tab => (
+            ].filter(Boolean).map(tab => (
               <button
                 type="button"
                 key={tab.key}
@@ -1530,9 +1650,13 @@ export default function AskDrFleshner() {
           {uploadMode === "scenario" && (
             <div>
               <p style={{ fontSize: 14, color: "#506D65", margin: "0 0 16px", lineHeight: 1.5 }}>
-                Select a pre-built patient record to test the consultation, or upload your own referral file to add it to the library.
+                {userMode === "tester"
+                  ? "Pick a patient scenario to play through. Each one tests a different clinical decision branch."
+                  : "Select a pre-built patient record to test the consultation, or upload your own referral file to add it to the library."}
               </p>
-              {/* Upload to add scenario */}
+              {/* Upload to add scenario — hidden in tester mode (testers
+                  go through Build Your Own if they want a custom case). */}
+              {userMode !== "tester" && (
               <div
                 onClick={() => scenarioFileRef.current?.click()}
                 style={{
@@ -1554,6 +1678,7 @@ export default function AskDrFleshner() {
                   Upload a referral file to add to scenarios
                 </span>
               </div>
+              )}
               {/* Custom uploads section (if any) */}
               {customScenarios.length > 0 && (
                 <div style={{ marginBottom: 20 }}>
@@ -1627,6 +1752,9 @@ export default function AskDrFleshner() {
                     </div>
                     {scenarios.map(sc => {
                       const isSelected = patientData && patientData.name === sc.data.name;
+                      // "Already completed" badge — only relevant in tester mode.
+                      // Phase 2 will hydrate completedScenarios from the KV store.
+                      const completed = userMode === "tester" && completedScenarios.includes(sc.id);
                       return (
                         <div
                           key={sc.id}
@@ -1638,9 +1766,20 @@ export default function AskDrFleshner() {
                             marginBottom: 8, transition: "all 0.2s",
                           }}
                         >
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
                             <span style={{ fontSize: 15, fontWeight: 600, color: "#1F2937" }}>{sc.data.name}</span>
-                            {isSelected && <span style={{ fontSize: 13, color: "#1A6B5B", fontWeight: 600 }}>Selected ✓</span>}
+                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                              {completed && (
+                                <span aria-label="You've completed this scenario before" style={{
+                                  fontSize: 11, color: "#1A6B5B", background: "#E8F3EF",
+                                  padding: "3px 8px", borderRadius: 8, fontWeight: 600,
+                                  display: "inline-flex", alignItems: "center", gap: 4,
+                                }}>
+                                  <span aria-hidden="true">✓</span> Completed
+                                </span>
+                              )}
+                              {isSelected && <span style={{ fontSize: 13, color: "#1A6B5B", fontWeight: 600 }}>Selected ✓</span>}
+                            </div>
                           </div>
                           <div style={{ fontSize: 13, color: "#1A6B5B", fontWeight: 600, marginTop: 2 }}>{sc.label}</div>
                           <div style={{ fontSize: 13, color: "#506D65", marginTop: 2 }}>{sc.summary}</div>
@@ -2385,6 +2524,33 @@ export default function AskDrFleshner() {
             {isLoading ? "Typing..." : `${CONDITION_LABELS[detectedCondition] || "Virtual Consultation"}`}
           </p>
         </div>
+        {/* Tester-mode role chip — sits in the header so the evaluator
+            always knows which patient identity they're voicing. Hidden in
+            patient mode (no role split). Truncates on mobile. */}
+        {userMode === "tester" && patientData?.name && (
+          <div
+            aria-label={`Demo session — ${firstName} ${lastName} playing ${patientData.name}`}
+            style={{
+              fontSize: isMobile ? 10 : 12,
+              color: "#1A6B5B",
+              background: "#E8F3EF",
+              border: "1px solid #B8DCD0",
+              borderRadius: 999,
+              padding: isMobile ? "4px 8px" : "5px 12px",
+              fontFamily: "-apple-system, 'Segoe UI', sans-serif",
+              fontWeight: 600,
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+              maxWidth: isMobile ? 140 : 280,
+            }}
+            title={`${firstName} ${lastName} → playing ${patientData.name}`}
+          >
+            {isMobile
+              ? `→ ${patientData.name.split(" ")[0]}`
+              : `${firstName} → playing ${patientData.name}`}
+          </div>
+        )}
         <button
           type="button"
           aria-label={dashboardOpen ? "Hide patient dashboard" : "Show patient dashboard"}
@@ -2626,8 +2792,43 @@ export default function AskDrFleshner() {
                 fontSize: 14,
                 textAlign: "center",
                 fontFamily: "'Söhne', -apple-system, 'Segoe UI', system-ui, sans-serif",
+                display: "flex", flexDirection: "column", alignItems: "center", gap: 12,
               }}>
-                This consultation has ended. If you need further help, please book a follow-up.
+                <span>
+                  {userMode === "tester"
+                    ? "This consultation has ended. Try another scenario or end your testing session."
+                    : "This consultation has ended. If you need further help, please book a follow-up."}
+                </span>
+                {userMode === "tester" && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Reset all per-consultation state, return to scenario picker.
+                      // Tester identity (firstName/lastName/role/testerId) is preserved.
+                      setMessages([]);
+                      setPatientData(null);
+                      setRawFileText("");
+                      setDetectedCondition(null);
+                      setSessionEnded(false);
+                      setSoapAutoTriggered(false);
+                      setSoapNote("");
+                      setSoapLoading(false);
+                      setClinicalState(null);
+                      setPanelStates({});
+                      setFileUploaded(false);
+                      initialContextRef.current = "";
+                      setStep("upload");
+                    }}
+                    style={{
+                      padding: "10px 20px", minHeight: 44, borderRadius: 22,
+                      background: "#1A6B5B", color: "#fff", border: "none",
+                      fontWeight: 600, fontSize: 14, cursor: "pointer",
+                      fontFamily: "-apple-system, 'Segoe UI', sans-serif",
+                    }}
+                  >
+                    Try another scenario →
+                  </button>
+                )}
               </div>
             ) : (
               <div style={styles.inputRow}>
