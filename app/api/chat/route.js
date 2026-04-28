@@ -3,6 +3,7 @@ import edPrompt from "../../../prompts/ed";
 import mhPrompt from "../../../prompts/mh";
 import unknownPrompt from "../../../prompts/unknown";
 import { saveConversation } from "../../../lib/store";
+import { injectMarkersIntoContent } from "../../../lib/marker-injector";
 
 const PROMPTS = { bph: bphPrompt, ed: edPrompt, mh: mhPrompt, unknown: unknownPrompt };
 
@@ -45,7 +46,17 @@ export async function POST(request) {
     const data = await response.json();
 
     // Extract only the content — never expose full API response to client
-    const content = data.content || [];
+    const rawContent = data.content || [];
+
+    // Backstop the model on qid markers. If a clinical question came back
+    // without a marker, match it against the registry and inject one. Pure
+    // belt-and-suspenders — the client still has its own fallback layers.
+    const { content, stats: markerStats } = injectMarkersIntoContent(rawContent, condition);
+    if (markerStats && (markerStats.injected || markerStats.unmatched)) {
+      console.log(
+        `[marker-injector] ${condition}: ${markerStats.alreadyMarked}/${markerStats.textBlocks} pre-marked, +${markerStats.injected} injected, ${markerStats.unmatched} unmatched`
+      );
+    }
 
     // Save conversation state for admin
     if (conversationId) {

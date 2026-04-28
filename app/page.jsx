@@ -153,6 +153,90 @@ const SCENARIO_DB = [
       priorImaging: "None",
     },
   },
+
+  // =====================================================================
+  // EDGE CASES — high-stakes branches the AI must route correctly.
+  // Each one is intentionally adversarial: a wrong answer would be a
+  // clinically meaningful mistake. Used by the QA harness only — they're
+  // visible in the test-scenarios picker so the reviewing physician can
+  // also demo them manually.
+  // =====================================================================
+  {
+    id: "ed-3", condition: "ed", label: "Nitrate user — ABSOLUTE CONTRAINDICATION (Outcome C)",
+    summary: "67M, stable angina on PRN nitroglycerin — sildenafil contraindicated",
+    data: {
+      name: "Frank Delgado", age: "67", sex: "Male", mrn: "UHN-2024-62288",
+      pcp: "Dr. Elena Roussos", referralReason: "Erectile dysfunction. Progressive over 2 years. Has stable angina, uses sublingual nitroglycerin spray as needed (last used ~2 weeks ago for chest pain on exertion). Requesting medication.",
+      testosterone: "12.4 nmol/L", fastingGlucose: "6.4 mmol/L", hba1c: "6.4%",
+      lipids: "LDL 2.6 mmol/L", psa: "2.1 ng/mL",
+      priorEdTreatment: "None — has heard about sildenafil from friends",
+      edDuration: "2 years", edSeverity: "Moderate to severe",
+      medicalHistory: ["Stable angina (CCS class II)", "Hypertension", "Dyslipidemia", "Former smoker (quit 2018)"],
+      surgicalHistory: ["Coronary angiogram 2019 — non-obstructive disease"],
+      allergies: "None known",
+      medications: ["Nitroglycerin 0.4mg SL spray PRN", "Metoprolol 50mg BID", "Ramipril 10mg daily", "Atorvastatin 40mg daily", "ASA 81mg daily"],
+    },
+  },
+  {
+    id: "ed-4", condition: "ed", label: "Young, sudden onset, situational — psychogenic differential",
+    summary: "32M, ED for 3 months, situational (fine on own), normal hormones",
+    data: {
+      name: "Alex Rivera", age: "32", sex: "Male", mrn: "UHN-2024-63110",
+      pcp: "Dr. Priya Iyer", referralReason: "Sudden-onset erectile dysfunction over the past 3 months. Patient reports normal morning erections and no problem with self-stimulation, but unable to maintain erection with new partner. Recent job change and high stress noted. Requesting evaluation.",
+      testosterone: "18.6 nmol/L", fastingGlucose: "4.8 mmol/L", hba1c: "5.2%",
+      lipids: "LDL 2.1 mmol/L", psa: "0.6 ng/mL",
+      priorEdTreatment: "None",
+      edDuration: "3 months", edSeverity: "Mild — situational",
+      medicalHistory: ["Anxiety (intermittent, no medication)"],
+      surgicalHistory: ["None"],
+      allergies: "None known",
+      medications: ["None"],
+    },
+  },
+  {
+    id: "bph-3", condition: "bph", label: "Severe LUTS + high PVR — Urgent in-person (no Rx)",
+    summary: "72M, severe symptoms, PVR 380 mL, possible chronic retention",
+    data: {
+      name: "Henryk Kowalski", age: "72", sex: "Male", mrn: "UHN-2024-45670",
+      pcp: "Dr. Sandra Park", referralReason: "Severe LUTS with sense of incomplete emptying. Reports straining, very weak stream, dribbling, and feeling 'never quite empty'. PVR by bladder scan is 380 mL. Creatinine modestly up from baseline. Requesting urgent assessment.",
+      psa: "4.6 ng/mL", freePsa: "0.22", ua: "Trace blood, otherwise normal",
+      prostateVolume: "78cc", pvr: "380 mL", creatinine: "118 µmol/L", egfr: "58 mL/min",
+      medicalHistory: ["Hypertension", "Type 2 diabetes (controlled)", "Hyperlipidemia"],
+      surgicalHistory: ["Cataract surgery 2020"],
+      allergies: "None known",
+      medications: ["Amlodipine 10mg daily", "Metformin 1000mg BID", "Atorvastatin 20mg daily"],
+    },
+  },
+  {
+    id: "mh-3", condition: "mh", label: "High-risk — Smoker, intermittent gross hematuria",
+    summary: "68M, 35 pack-year smoker, occasional visible red urine — needs imaging + cysto",
+    data: {
+      name: "Walter Hayes", age: "68", sex: "Male", mrn: "UHN-2024-72990",
+      pcp: "Dr. Frank Holland", referralReason: "Microscopic hematuria on routine urinalysis (28 RBC/HPF). On further history, patient reports 2 episodes of pink-to-red urine over the past 4 months that resolved spontaneously. 35 pack-year smoking history (current smoker, ½ ppd). Worked in a printing plant for 25 years.",
+      rbcHpf: "28 RBC/HPF", uaMethod: "Microscopy", dipstick: "3+ blood",
+      proteinuria: "Negative", urineCulture: "No growth", creatinine: "94 µmol/L", egfr: "78 mL/min",
+      medicalHistory: ["Hypertension", "COPD (mild)", "Hyperlipidemia"],
+      surgicalHistory: ["Inguinal hernia 2010"],
+      allergies: "None known",
+      medications: ["Amlodipine 5mg daily", "Tiotropium inhaler", "Atorvastatin 20mg daily"],
+      priorImaging: "None",
+    },
+  },
+  {
+    id: "mh-4", condition: "mh", label: "Premenopausal female, low RBC — Menstrual contamination differential",
+    summary: "28F, 4 RBC/HPF, sample taken near period — likely contamination",
+    data: {
+      name: "Jasmine Okafor", age: "28", sex: "Female", mrn: "UHN-2024-73881",
+      pcp: "Dr. Luca Bianchi", referralReason: "Microscopic hematuria found on urinalysis ordered for fatigue workup. 4 RBC/HPF. Patient mentions the sample was collected during the last day of her menstrual period. No urinary symptoms. No risk factors.",
+      rbcHpf: "4 RBC/HPF", uaMethod: "Microscopy", dipstick: "Trace blood",
+      proteinuria: "Negative", urineCulture: "No growth", creatinine: "62 µmol/L", egfr: "118 mL/min",
+      medicalHistory: ["None"],
+      surgicalHistory: ["None"],
+      allergies: "None known",
+      medications: ["Combined oral contraceptive"],
+      priorImaging: "None",
+    },
+  },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -2134,10 +2218,13 @@ export default function AskDrFleshner() {
       });
 
       const data = await response.json();
-      setSoapNote(data.note || "Unable to generate SOAP note. Please try again.");
+      // Patient-facing copy. The auto-trigger path (around L1061) uses the
+      // same wording — keep them in sync. "SOAP note" is internal jargon;
+      // patients see "visit summary".
+      setSoapNote(data.note || "We couldn't prepare your visit summary right now. Our team has a copy on file — please reach out if you'd like one sent to you.");
     } catch (err) {
       console.error("SOAP generation error:", err);
-      setSoapNote("Error generating SOAP note. Please try again.");
+      setSoapNote("We couldn't prepare your visit summary right now. Our team has a copy on file — please reach out if you'd like one sent to you.");
     }
 
     setSoapLoading(false);

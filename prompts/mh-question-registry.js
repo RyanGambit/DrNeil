@@ -333,7 +333,12 @@ const MH_QUESTION_REGISTRY = [
   {
     id: "risk-q7-chemo",
     phase: 3,
-    question: "Have you ever had chemotherapy — specifically a drug called cyclophosphamide (sometimes called Cytoxan) or ifosfamide?",
+    // Question text matches the prompt's `Ask EXACTLY` line in mh.js (Q7).
+    // The earlier registry text included "(sometimes called Cytoxan)" but the
+    // prompt told the model to omit it — needle-match against registry then
+    // failed and dropped the qid marker. Fingerprints are belt-and-suspenders.
+    question: "Have you ever had chemotherapy — specifically a drug called cyclophosphamide or ifosfamide?",
+    fingerprints: ["cyclophosphamide", "ifosfamide", "cytoxan"],
     chips: ["No", "Yes", "I've had chemo but don't know the drug"],
     layout: "horizontal",
     condition: null,

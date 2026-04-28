@@ -1,3 +1,5 @@
+qa-findings/*
+!qa-findings/qa-report.html
 node_modules/
 .next/
 .env.local
