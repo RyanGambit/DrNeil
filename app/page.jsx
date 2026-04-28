@@ -642,7 +642,10 @@ export default function AskDrFleshner() {
   const [emailSent, setEmailSent] = useState(false);
   const [emailSending, setEmailSending] = useState(false);
   const [clinicalState, setClinicalState] = useState(null);
-  const [dashboardOpen, setDashboardOpen] = useState(typeof window !== "undefined" && window.innerWidth >= 768);
+  // Initialize to `false` (matches server-render). The post-mount effect
+  // below flips it to true on desktop. Avoids the hydration mismatch that
+  // fired four React errors (#418/#423/#425) on every page load.
+  const [dashboardOpen, setDashboardOpen] = useState(false);
   const [uploadMode, setUploadMode] = useState("scenario"); // "file" | "scenario" | "build"
   const [buildCondition, setBuildCondition] = useState("bph");
   const [buildForm, setBuildForm] = useState({});
@@ -659,14 +662,37 @@ export default function AskDrFleshner() {
   const scenarioFileRef = useRef(null);
   const initialContextRef = useRef("");
 
-  // Responsive breakpoint hook
+  // Responsive breakpoint hook. Both isMobile and dashboardOpen start at
+  // their server-render-safe defaults (false) so hydration matches; the
+  // first post-mount run reconciles to the real viewport. Only the first
+  // mount opens the dashboard on desktop — subsequent resizes don't, so
+  // we don't override the user's manual close.
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
-    check();
-    window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
+    setIsMobile(window.innerWidth < 768);
+    if (window.innerWidth >= 768) setDashboardOpen(true);
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
   }, []);
+
+  // Guard against accidental refresh / tab-close during an active
+  // consultation. There's no server-side persistence — refresh wipes
+  // everything — so a confirmation prompt is the only safety net.
+  // The browser shows its own generic "leave site?" dialog; the string
+  // we set is ignored by modern Chrome/Safari but the prompt still fires.
+  useEffect(() => {
+    const inActiveConsult =
+      step === "chat" && !sessionEnded && messages.length > 1;
+    if (!inActiveConsult) return;
+    const handler = (e) => {
+      e.preventDefault();
+      e.returnValue = ""; // required for Chrome
+      return "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [step, sessionEnded, messages.length]);
 
   // ═══════════════════════════════════════════════════════════════════════
   // UI PANEL SYSTEM — ED Only (from ED_Desktop_Style_Guide.jsx)
@@ -690,6 +716,10 @@ export default function AskDrFleshner() {
   };
 
   const handlePanelSubmit = (messageIndex, responseText) => {
+    // Guard against double-fire: if the previous turn is still in flight,
+    // ignore the chip tap. Without this, tapping a chip then immediately
+    // typing + Enter could fire two sendToAPI calls in parallel.
+    if (isLoading) return;
     setPanelStates((prev) => ({
       ...prev,
       [messageIndex]: { submitted: true, response: responseText },

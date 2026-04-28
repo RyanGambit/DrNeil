@@ -85,7 +85,13 @@ Format the output with clear section headers. Be specific and clinical.`;
     const noteText = data.content
       ?.filter((b) => b.type === "text")
       .map((b) => b.text)
-      .join("\n") || "Unable to generate SOAP note.";
+      .join("\n") || "";
+
+    // Empty content from the model — return null so the frontend's
+    // patient-friendly fallback fires instead of a technical string.
+    if (!noteText.trim()) {
+      return Response.json({ note: null });
+    }
 
     return Response.json({ note: noteText });
   } catch (error) {

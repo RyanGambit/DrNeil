@@ -63,7 +63,12 @@ Return this exact JSON structure, filling in what you can determine from the con
       body: JSON.stringify({
         model: "claude-opus-4-6",
         temperature: 0,
-        max_tokens: 1000,
+        // 1000 was getting truncated mid-string on long transcripts —
+        // ~10 502 errors per consultation with "Unterminated string in
+        // JSON" parse failures. The schema can run ~1500 tokens at full
+        // population (phenotypeSignals, riskFactors, keyFindings arrays).
+        // 2500 gives comfortable headroom.
+        max_tokens: 2500,
         messages: [{ role: "user", content: analysisPrompt }],
       }),
     });
