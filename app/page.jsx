@@ -395,8 +395,10 @@ function renderMarkdown(text) {
     .replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "<em>$1</em>")
     // Bullet points → clean lines
     .replace(/^[-•]\s+/gm, "  · ")
-    // Action links [Schedule Follow-Up] / [Schedule In-Person Visit] → styled buttons
-    .replace(/\[Schedule ([^\]]+)\]/g, '<span style="display:inline-block;margin:6px 0;padding:8px 16px;background:#0f7b6c;color:#fff;border-radius:8px;font-size:13px;font-weight:600;">📅 Schedule $1</span>')
+    // Action links [Schedule Follow-Up] / [Schedule In-Person Visit] →
+    // interactive buttons. The chat surface listens for clicks on
+    // `[data-schedule-action]` and opens the simulated calendar modal.
+    .replace(/\[Schedule ([^\]]+)\]/g, '<button type="button" data-schedule-action="$1" style="display:inline-block;margin:6px 0;padding:10px 18px;background:#1A6B5B;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;min-height:44px;">📅 Schedule $1</button>')
     // Double newlines → paragraph breaks
     .replace(/\n\n/g, "<br/><br/>")
     // Single newlines → line breaks
@@ -663,13 +665,22 @@ export default function AskDrFleshner() {
   // calls /api/sessions/start; used by the session-end watcher to mark
   // the session complete in KV.
   const [currentSessionId, setCurrentSessionId] = useState(null);
+  // Demo simulation state: schedule modal + which booking actions have
+  // been confirmed. None of this is real — the residents see a fake
+  // calendar, fake confirmations, and a fake email card. The intent is
+  // for the demo to feel end-to-end without depending on real backend
+  // services we haven't built (calendar API, pharmacy network, mailer).
+  const [scheduleModal, setScheduleModal] = useState({ open: false, action: null });
+  const [pharmacySent, setPharmacySent] = useState(false);
+  // bookings: list of confirmed appointments. Rendered as inline cards
+  // in the chat log so the resident sees the "I just booked something"
+  // moment as part of the conversation, not as a disconnected toast.
+  const [bookings, setBookings] = useState([]);
   const [buildCondition, setBuildCondition] = useState("bph");
   const [buildForm, setBuildForm] = useState({});
   const [aiGenerating, setAiGenerating] = useState(false);
   const [customScenarios, setCustomScenarios] = useState([]);
   const [storageReady, setStorageReady] = useState(false);
-  const [isListening, setIsListening] = useState(false);
-  const recognitionRef = useRef(null);
   // ── UI Panel State (ED only) ──
   const [panelStates, setPanelStates] = useState({}); // { [msgIndex]: { submitted, responses } }
   const [conversationId] = useState(() => `consult-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
@@ -851,6 +862,170 @@ export default function AskDrFleshner() {
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════════
+  // DEMO SIMULATIONS
+  // ═══════════════════════════════════════════════════════════════════
+  // The product talks about scheduling appointments, sending prescriptions
+  // to a pharmacy, and emailing follow-ups — but the production backend
+  // for those services doesn't exist yet. For the resident demo we
+  // simulate the visible parts so the experience feels end-to-end.
+  // Every simulated card carries a small "(simulated)" hint so the
+  // tester knows what's real vs scaffolded.
+
+  // Generate three plausible appointment slots starting tomorrow.
+  function generateFakeSlots() {
+    const slots = [];
+    const now = new Date();
+    let added = 0;
+    let dayOffset = 1;
+    const times = [
+      { h: 9, m: 30 },
+      { h: 14, m: 0 },
+      { h: 11, m: 0 },
+      { h: 15, m: 30 },
+    ];
+    while (added < 3 && dayOffset < 14) {
+      const d = new Date(now);
+      d.setDate(d.getDate() + dayOffset);
+      // Skip Sunday (0) and Saturday (6) for in-person feel.
+      if (d.getDay() !== 0 && d.getDay() !== 6) {
+        const t = times[added % times.length];
+        d.setHours(t.h, t.m, 0, 0);
+        slots.push(d);
+        added++;
+      }
+      dayOffset++;
+    }
+    return slots;
+  }
+
+  function fmtSlot(d) {
+    const day = d.toLocaleDateString("en-CA", { weekday: "long", month: "short", day: "numeric" });
+    const time = d.toLocaleTimeString("en-CA", { hour: "numeric", minute: "2-digit" });
+    return `${day} · ${time}`;
+  }
+
+  // ── SCHEDULE MODAL ──
+  function ScheduleModal() {
+    const [picked, setPicked] = useState(null);
+    const slots = generateFakeSlots();
+    if (!scheduleModal.open) return null;
+    const action = scheduleModal.action || "Appointment";
+
+    const onConfirm = () => {
+      if (!picked) return;
+      const slotDate = slots[picked];
+      setBookings((prev) => [
+        ...prev,
+        {
+          id: `bk-${Date.now()}`,
+          action,
+          when: slotDate.getTime(),
+          messageCount: messages.length, // anchor card after the current last message
+        },
+      ]);
+      setScheduleModal({ open: false, action: null });
+    };
+
+    return (
+      <div
+        role="dialog"
+        aria-label={`Schedule ${action}`}
+        aria-modal="true"
+        style={{
+          position: "fixed", inset: 0, background: "rgba(15, 28, 25, 0.55)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          padding: 16, zIndex: 1000,
+        }}
+        onClick={() => setScheduleModal({ open: false, action: null })}
+      >
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            background: "#fff", borderRadius: 14, padding: "22px 24px 18px",
+            maxWidth: 440, width: "100%", boxShadow: "0 12px 48px rgba(0,0,0,0.18)",
+            fontFamily: "-apple-system, 'Segoe UI', sans-serif",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
+            <h3 style={{ fontSize: 18, color: "#1F2937", margin: 0, fontFamily: "'Georgia', serif" }}>
+              Schedule {action}
+            </h3>
+            <span style={{ fontSize: 10, color: "#506D65", textTransform: "uppercase", letterSpacing: 0.5 }}>(simulated)</span>
+          </div>
+          <p style={{ fontSize: 13, color: "#506D65", margin: "0 0 14px" }}>
+            Available with Dr. Neil Fleshner
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 18 }}>
+            {slots.map((slot, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => setPicked(i)}
+                aria-pressed={picked === i}
+                style={{
+                  textAlign: "left", padding: "12px 14px", minHeight: 44,
+                  borderRadius: 10, fontSize: 14,
+                  border: picked === i ? "2px solid #1A6B5B" : "1.5px solid #D8F0EA",
+                  background: picked === i ? "#E8F3EF" : "#fff",
+                  color: "#1F2937", fontWeight: picked === i ? 600 : 500,
+                  cursor: "pointer", fontFamily: "inherit",
+                }}
+              >
+                {picked === i && <span aria-hidden="true" style={{ marginRight: 8, color: "#1A6B5B" }}>✓</span>}
+                {fmtSlot(slot)}
+              </button>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <button
+              type="button"
+              onClick={() => setScheduleModal({ open: false, action: null })}
+              style={{
+                padding: "10px 16px", minHeight: 44, borderRadius: 8,
+                border: "1.5px solid #D8F0EA", background: "#fff", color: "#506D65",
+                fontWeight: 600, fontSize: 13, cursor: "pointer", fontFamily: "inherit",
+              }}
+            >Cancel</button>
+            <button
+              type="button"
+              onClick={onConfirm}
+              disabled={picked === null}
+              style={{
+                padding: "10px 18px", minHeight: 44, borderRadius: 8,
+                border: "none", background: "#1A6B5B", color: "#fff",
+                fontWeight: 600, fontSize: 13,
+                cursor: picked === null ? "not-allowed" : "pointer",
+                opacity: picked === null ? 0.5 : 1, fontFamily: "inherit",
+              }}
+            >Confirm booking</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Inline confirmation card rendered in the chat log.
+  function SystemCard({ icon, title, children, hint }) {
+    return (
+      <div style={{
+        marginLeft: 48, maxWidth: "80%", marginBottom: 8,
+        background: "#F5FBF9", border: "1px solid #B8DCD0",
+        borderRadius: 12, padding: "12px 14px",
+        fontFamily: "-apple-system, 'Segoe UI', sans-serif",
+      }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
+          <span aria-hidden="true" style={{ fontSize: 16 }}>{icon}</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: "#1A6B5B" }}>{title}</span>
+          {hint && <span style={{ fontSize: 10, color: "#506D65", textTransform: "uppercase", letterSpacing: 0.5, marginLeft: "auto" }}>{hint}</span>}
+        </div>
+        <div style={{ fontSize: 13, color: "#1F2937", lineHeight: 1.5 }}>
+          {children}
+        </div>
+      </div>
+    );
+  }
+
   // ── RESPONSE CARD: Single contained component for ALL question types ──
   // ResponseCard: chips only, no text field. Contained card with border + shadow.
   // The main chat input at the bottom is always available as an escape hatch.
@@ -964,61 +1139,37 @@ export default function AskDrFleshner() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // ── VOICE RECOGNITION ──
-  const toggleListening = () => {
-    if (isListening) {
-      recognitionRef.current?.stop();
-      return;
-    }
-
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert("Voice input is not supported in this browser. Please use Chrome or Edge.");
-      return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.lang = "en-US";
-    recognition.interimResults = true;
-    recognition.continuous = true;
-    recognitionRef.current = recognition;
-
-    let finalTranscript = "";
-
-    recognition.onresult = (event) => {
-      let interim = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcript = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          finalTranscript += transcript;
-        } else {
-          interim = transcript;
-        }
-      }
-      setInput(finalTranscript + interim);
-    };
-
-    recognition.onend = () => {
-      setIsListening(false);
-      recognitionRef.current = null;
-    };
-
-    recognition.onerror = (event) => {
-      console.error("Speech recognition error:", event.error);
-      setIsListening(false);
-      recognitionRef.current = null;
-    };
-
-    recognition.start();
-    setIsListening(true);
-  };
-
-  // Clean up recognition on unmount or step change
+  // Event delegation for the simulated [Schedule X] buttons inside the
+  // chat log. The buttons are rendered via dangerouslySetInnerHTML so
+  // we can't bind onClick directly; we listen at the container level
+  // and check the data attribute.
   useEffect(() => {
-    return () => {
-      recognitionRef.current?.stop();
+    if (step !== "chat") return;
+    const onClick = (e) => {
+      const btn = e.target.closest && e.target.closest("[data-schedule-action]");
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const action = btn.getAttribute("data-schedule-action") || "Appointment";
+      setScheduleModal({ open: true, action });
     };
+    document.addEventListener("click", onClick, true);
+    return () => document.removeEventListener("click", onClick, true);
   }, [step]);
+
+  // When the AI says it's sending the prescription to the pharmacy,
+  // surface a simulated confirmation card. Detection is text-based —
+  // matches the verbatim wording from the medication outcome scripts.
+  useEffect(() => {
+    if (pharmacySent) return;
+    if (!messages.length) return;
+    const recent = messages.slice(-3).filter(m => m.role === "assistant");
+    const hit = recent.some(m => /send (this|it|your prescription) to (your |the )?pharmacy/i.test(m.text || ""));
+    if (hit) setPharmacySent(true);
+  }, [messages, pharmacySent]);
+
+  // Voice recognition was removed — inconsistent across browsers (broken on
+  // Firefox, flaky on iOS Safari) and not core to the demo experience.
 
   // Waiting room animation
   const waitingSteps = [
@@ -2567,6 +2718,7 @@ export default function AskDrFleshner() {
   return (
     <div style={{ height: "100vh", display: "flex", flexDirection: "column", background: "#F5FBF9" }}>
       <h1 className="sr-only">Virtual Consultation with Dr. Neil Fleshner</h1>
+      <ScheduleModal />
       {/* Header */}
       <div style={{ ...styles.chatHeader, padding: isMobile ? "10px 12px" : "14px 20px", gap: isMobile ? 8 : 12 }}>
         <img src={DR_AVATAR} alt="Dr. Fleshner" style={{ ...styles.chatAvatar, width: isMobile ? 36 : 44, height: isMobile ? 36 : 44 }} />
@@ -2744,6 +2896,48 @@ export default function AskDrFleshner() {
                 </button>
               </div>
             )}
+            {/* ── DEMO SIMULATION CARDS ───────────────────────────────
+                Rendered after the message log. They appear in
+                conversation order based on when each was triggered
+                (booking via the modal, pharmacy via text-detection).
+                Each card carries a "(simulated)" hint. */}
+            {bookings.map((bk) => (
+              <SystemCard key={bk.id} icon="📅" title="Appointment booked" hint="(simulated)">
+                <div><strong>Dr. Neil Fleshner — {bk.action}</strong></div>
+                <div style={{ marginTop: 2 }}>{fmtSlot(new Date(bk.when))}</div>
+                <div style={{ marginTop: 6, color: "#506D65" }}>
+                  Confirmation sent to your email. We'll send a reminder 24 hours before.
+                </div>
+              </SystemCard>
+            ))}
+            {pharmacySent && (
+              <SystemCard icon="💊" title="Prescription sent" hint="(simulated)">
+                <div>Your prescription has been sent to your pharmacy of choice.</div>
+                <div style={{ marginTop: 6, color: "#506D65" }}>
+                  Pickup typically ready in 2–4 hours. The pharmacy will text you when it's ready.
+                </div>
+              </SystemCard>
+            )}
+            {sessionEnded && (
+              <SystemCard icon="📧" title={`Email from Dr. Neil Fleshner`} hint="(simulated)">
+                <div style={{ color: "#506D65", fontSize: 12, marginBottom: 6 }}>
+                  To: {patientData?.name || `${firstName} ${lastName}`} &middot; From: Dr. Neil Fleshner &lt;office@askdrfleshner.io&gt;
+                </div>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>Your virtual consultation summary</div>
+                <div style={{ lineHeight: 1.55 }}>
+                  Thanks for the visit today — it was good to walk through this with you.
+                  Your visit summary is attached, along with everything we discussed and
+                  any next steps. If anything changes or new symptoms come up before our
+                  follow-up, please reach out to the office and we'll get you in sooner.
+                  <br /><br />
+                  Take care,<br />
+                  Dr. Neil Fleshner
+                </div>
+                <div style={{ marginTop: 8, padding: "6px 10px", border: "1px dashed #B8DCD0", borderRadius: 6, fontSize: 12, color: "#506D65" }}>
+                  📎 visit-summary.rtf — attached
+                </div>
+              </SystemCard>
+            )}
             <div ref={chatEndRef} />
           </div>
 
@@ -2893,36 +3087,14 @@ export default function AskDrFleshner() {
                   value={input}
                   onChange={(e) => { setInput(e.target.value); }}
                   onKeyDown={handleKeyDown}
-                  placeholder={isListening ? "Listening..." : "Type or tap the mic to speak..."}
+                  placeholder="Type your reply…"
                   rows={1}
                 />
                 <button
                   type="button"
-                  aria-label={isListening ? "Stop voice input" : "Start voice input"}
-                  aria-pressed={isListening}
-                  style={{
-                    ...styles.micBtn,
-                    width: 44, height: 44,
-                    background: isListening ? "#DC2626" : "#F5FBF9",
-                    borderColor: isListening ? "#DC2626" : "#D8F0EA",
-                    color: isListening ? "#FFFFFF" : "#506D65",
-                    animation: isListening ? "micPulse 1.5s ease-in-out infinite" : "none",
-                  }}
-                  onClick={toggleListening}
-                  title={isListening ? "Stop listening" : "Start voice input"}
-                >
-                  <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="9" y="1" width="6" height="12" rx="3" />
-                    <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-                    <line x1="12" y1="19" x2="12" y2="23" />
-                    <line x1="8" y1="23" x2="16" y2="23" />
-                  </svg>
-                </button>
-                <button
-                  type="button"
                   aria-label="Send message"
                   style={{ ...styles.sendBtn, width: 44, height: 44, opacity: input.trim() && !isLoading ? 1 : 0.4 }}
-                  onClick={() => { if (isListening) recognitionRef.current?.stop(); handleSend(); }}
+                  onClick={handleSend}
                   disabled={!input.trim() || isLoading}
                 >
                   <span aria-hidden="true">↑</span>
@@ -2951,10 +3123,16 @@ export default function AskDrFleshner() {
               <h3 style={{ fontSize: 14, fontWeight: 700, color: "#1F2937", margin: 0, textTransform: "uppercase", letterSpacing: 0.8 }}>
                 Clinical Dashboard
               </h3>
-              <span style={{
-                fontSize: 10, fontWeight: 600, color: "#FFFFFF", background: "#1A6B5B",
-                padding: "3px 8px", borderRadius: 4, textTransform: "uppercase", letterSpacing: 0.5,
-              }}>LIVE</span>
+              {/* "DEMO" badge — clarifies this is a simulated dashboard for
+                  evaluation, not a production clinical telemetry surface. */}
+              <span
+                title="Demo dashboard — populated by a synthetic-analysis pass during testing"
+                style={{
+                  fontSize: 10, fontWeight: 700, color: "#1A6B5B", background: "#E8F3EF",
+                  border: "1px solid #B8DCD0", padding: "3px 8px", borderRadius: 4,
+                  textTransform: "uppercase", letterSpacing: 0.5,
+                }}
+              >Demo</span>
             </div>
 
             {/* Phase Indicator */}
