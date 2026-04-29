@@ -2829,6 +2829,49 @@ export default function AskDrFleshner() {
                       />
                     );
                   })()}
+                  {/* Dynamic-question UX nudge.
+                      The AI sometimes improvises a follow-up question that
+                      isn't in the registry (e.g. an IPSS bother / QoL
+                      reconciliation). Those have no chips, so the patient
+                      can wonder "where do I answer?" Render a soft hint
+                      pointing at the chat input — only on the most recent
+                      assistant message, only when no ResponseCard / panel
+                      will show, only when the user hasn't started typing,
+                      and only when there's actually a question. */}
+                  {(() => {
+                    if (msg.role !== "assistant") return null;
+                    if (sessionEnded || isLoading) return null;
+                    if (input.trim()) return null;
+                    if (panelStates[i]?.submitted) return null;
+                    if (!(msg.text || "").includes("?")) return null;
+                    // Find the latest assistant message — only show under that one.
+                    let latest = -1;
+                    for (let j = displayMessages.length - 1; j >= 0; j--) {
+                      if (displayMessages[j].role === "assistant") { latest = j; break; }
+                    }
+                    if (i !== latest) return null;
+                    // If a registry-driven panel will render, skip the hint.
+                    if (detectedCondition === "ed" || detectedCondition === "bph" || detectedCondition === "mh") {
+                      const entry = resolveEntry(msg, displayMessages, i, detectedCondition);
+                      if (entry?.type === "confirm-panel") return null;
+                      if (entry?.chips?.length) return null;
+                    }
+                    return (
+                      <div
+                        aria-live="polite"
+                        style={{
+                          marginLeft: 48, marginTop: 4, marginBottom: 6,
+                          fontSize: 13, color: "#1A6B5B",
+                          fontFamily: "-apple-system, 'Segoe UI', sans-serif",
+                          display: "inline-flex", alignItems: "center", gap: 6,
+                          animation: "hintFadeIn 0.4s ease-out",
+                        }}
+                      >
+                        <span aria-hidden="true" style={{ animation: "hintBounce 1.6s ease-in-out infinite", display: "inline-block" }}>↓</span>
+                        <span>Type your answer below</span>
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}

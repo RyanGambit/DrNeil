@@ -23,6 +23,14 @@ const globalStyles = `
   @keyframes spin {
     to { transform: rotate(360deg); }
   }
+  @keyframes hintFadeIn {
+    from { opacity: 0; transform: translateY(-2px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes hintBounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(2px); }
+  }
   input:focus, textarea:focus {
     border-color: #1A6B5B !important;
     outline: 2px solid #1A6B5B;
