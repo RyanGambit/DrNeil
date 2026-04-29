@@ -676,6 +676,14 @@ export default function AskDrFleshner() {
   // in the chat log so the resident sees the "I just booked something"
   // moment as part of the conversation, not as a disconnected toast.
   const [bookings, setBookings] = useState([]);
+  // Tester feedback form state. Lives at the session level — once
+  // submitted, the form collapses and shows a "thanks" confirmation.
+  const [feedbackForm, setFeedbackForm] = useState({
+    clinicalSoundness: 0, outcomeAccuracy: 0, uxRating: 0,
+    whatBroke: "", recommend: "", otherNotes: "",
+  });
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState(false);
+  const [feedbackSubmitting, setFeedbackSubmitting] = useState(false);
   const [buildCondition, setBuildCondition] = useState("bph");
   const [buildForm, setBuildForm] = useState({});
   const [aiGenerating, setAiGenerating] = useState(false);
@@ -1005,6 +1013,165 @@ export default function AskDrFleshner() {
     );
   }
 
+  // ── FEEDBACK FORM (tester only, post-session) ──
+  // 5 questions: clinical soundness 1-5, outcome accuracy 1-5, UX 1-5,
+  // free-text "what broke", recommend yes/maybe/no, optional other notes.
+  // Form-state is lifted to the parent so it survives FeedbackForm
+  // re-mounts (e.g. when other state above triggers a re-render).
+  function FeedbackForm({ form, setForm, submitting, onSubmit }) {
+    const ratingDisabled = !form.clinicalSoundness || !form.outcomeAccuracy || !form.uxRating || !form.recommend;
+
+    const Stars = ({ value, onChange, label }) => (
+      <div style={{ marginBottom: 12 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "#1F2937", marginBottom: 6 }}>{label}</div>
+        <div style={{ display: "flex", gap: 4 }}>
+          {[1, 2, 3, 4, 5].map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => onChange(n)}
+              aria-label={`Rate ${n} out of 5`}
+              aria-pressed={value === n}
+              style={{
+                width: 36, height: 36, borderRadius: 8,
+                border: value === n ? "2px solid #1A6B5B" : "1.5px solid #D8F0EA",
+                background: value === n ? "#1A6B5B" : "#fff",
+                color: value === n ? "#fff" : "#506D65",
+                fontSize: 14, fontWeight: 600, cursor: "pointer",
+                fontFamily: "inherit", transition: "all 0.12s ease",
+              }}
+            >
+              {n}
+            </button>
+          ))}
+          <span style={{ fontSize: 11, color: "#506D65", alignSelf: "center", marginLeft: 8 }}>
+            {value ? (value <= 2 ? "needs work" : value === 3 ? "okay" : value === 4 ? "good" : "great") : "1 = poor, 5 = great"}
+          </span>
+        </div>
+      </div>
+    );
+
+    return (
+      <div style={{
+        marginLeft: 48, marginRight: 0, maxWidth: 620, marginBottom: 12,
+        background: "#fff", border: "1.5px solid #B8DCD0",
+        borderRadius: 12, padding: "16px 18px",
+        fontFamily: "-apple-system, 'Segoe UI', sans-serif",
+        boxShadow: "0 2px 8px rgba(26,107,91,0.06)",
+      }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 4 }}>
+          <span aria-hidden="true" style={{ fontSize: 16 }}>📝</span>
+          <h3 style={{ fontSize: 15, fontWeight: 700, color: "#1A6B5B", margin: 0 }}>
+            Quick feedback
+          </h3>
+          <span style={{ fontSize: 11, color: "#506D65", marginLeft: "auto" }}>~2 min</span>
+        </div>
+        <p style={{ fontSize: 13, color: "#506D65", margin: "0 0 14px", lineHeight: 1.5 }}>
+          A few questions to help us improve. Your answers are recorded against this session.
+        </p>
+
+        <Stars
+          label="History-taking felt clinically sound"
+          value={form.clinicalSoundness}
+          onChange={(n) => setForm({ ...form, clinicalSoundness: n })}
+        />
+        <Stars
+          label="Final outcome matched the call you'd make"
+          value={form.outcomeAccuracy}
+          onChange={(n) => setForm({ ...form, outcomeAccuracy: n })}
+        />
+        <Stars
+          label="Patient-side UX (chips, flow, language)"
+          value={form.uxRating}
+          onChange={(n) => setForm({ ...form, uxRating: n })}
+        />
+
+        <div style={{ marginBottom: 12 }}>
+          <label htmlFor="fb-broke" style={{ fontSize: 13, fontWeight: 600, color: "#1F2937", display: "block", marginBottom: 6 }}>
+            Anything broken, confusing, or wrong? <span style={{ color: "#506D65", fontWeight: 400 }}>(optional)</span>
+          </label>
+          <textarea
+            id="fb-broke"
+            value={form.whatBroke}
+            onChange={(e) => setForm({ ...form, whatBroke: e.target.value })}
+            rows={3}
+            placeholder="e.g. The AI asked the same question twice…"
+            style={{
+              width: "100%", padding: "10px 12px", borderRadius: 8,
+              border: "1.5px solid #D8F0EA", fontSize: 13, fontFamily: "inherit",
+              resize: "vertical", lineHeight: 1.5, background: "#FAFCFB",
+            }}
+          />
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "#1F2937", marginBottom: 6 }}>
+            Would you recommend this to a colleague?
+          </div>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {[
+              { v: "yes", l: "Yes" },
+              { v: "maybe", l: "Maybe" },
+              { v: "no", l: "Not yet" },
+            ].map((opt) => (
+              <button
+                key={opt.v}
+                type="button"
+                onClick={() => setForm({ ...form, recommend: opt.v })}
+                aria-pressed={form.recommend === opt.v}
+                style={{
+                  padding: "8px 16px", minHeight: 40, borderRadius: 22,
+                  border: form.recommend === opt.v ? "2px solid #1A6B5B" : "1.5px solid #D8F0EA",
+                  background: form.recommend === opt.v ? "#E8F3EF" : "#fff",
+                  color: "#1F2937", fontSize: 13,
+                  fontWeight: form.recommend === opt.v ? 700 : 500,
+                  cursor: "pointer", fontFamily: "inherit",
+                }}
+              >
+                {form.recommend === opt.v && <span aria-hidden="true" style={{ marginRight: 4, color: "#1A6B5B" }}>✓</span>}
+                {opt.l}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <label htmlFor="fb-other" style={{ fontSize: 13, fontWeight: 600, color: "#1F2937", display: "block", marginBottom: 6 }}>
+            Anything else? <span style={{ color: "#506D65", fontWeight: 400 }}>(optional)</span>
+          </label>
+          <textarea
+            id="fb-other"
+            value={form.otherNotes}
+            onChange={(e) => setForm({ ...form, otherNotes: e.target.value })}
+            rows={2}
+            placeholder=""
+            style={{
+              width: "100%", padding: "10px 12px", borderRadius: 8,
+              border: "1.5px solid #D8F0EA", fontSize: 13, fontFamily: "inherit",
+              resize: "vertical", lineHeight: 1.5, background: "#FAFCFB",
+            }}
+          />
+        </div>
+
+        <button
+          type="button"
+          onClick={onSubmit}
+          disabled={ratingDisabled || submitting}
+          style={{
+            padding: "10px 20px", minHeight: 44, borderRadius: 22,
+            background: "#1A6B5B", color: "#fff", border: "none",
+            fontWeight: 600, fontSize: 14,
+            cursor: ratingDisabled || submitting ? "not-allowed" : "pointer",
+            opacity: ratingDisabled || submitting ? 0.5 : 1,
+            fontFamily: "inherit",
+          }}
+        >
+          {submitting ? "Submitting…" : "Submit feedback"}
+        </button>
+      </div>
+    );
+  }
+
   // Inline confirmation card rendered in the chat log.
   function SystemCard({ icon, title, children, hint }) {
     return (
@@ -1138,6 +1305,23 @@ export default function AskDrFleshner() {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Persist transcript to KV after each new message in tester mode so
+  // the admin view sees what's happening live (and post-mortem). Throttled
+  // to once-per-message; the tail effect runs in the background and is
+  // best-effort (a KV miss doesn't break the consultation).
+  useEffect(() => {
+    if (userMode !== "tester" || !currentSessionId) return;
+    if (!messages.length) return;
+    const trimmed = messages.map((m) => ({
+      role: m.role, text: m.text || "", time: m.time || null,
+    }));
+    fetch("/api/sessions/transcript", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId: currentSessionId, messages: trimmed }),
+    }).catch((e) => console.warn("transcript save failed:", e));
+  }, [messages, userMode, currentSessionId]);
 
   // Event delegation for the simulated [Schedule X] buttons inside the
   // chat log. The buttons are rendered via dangerouslySetInnerHTML so
@@ -1819,15 +2003,13 @@ export default function AskDrFleshner() {
           </div>
 
           {/* ── MODE TABS ── */}
-          {/* Testers don't see the Upload File tab — it's not part of the
-              demo-evaluation flow and the file format isn't documented for
-              external users. Patients keep the full three-tab choice. */}
+          {/* Two tabs only — file upload is gone. Both patient and tester
+              flows pick from Test Scenarios or Build Your Own. */}
           <div style={{ display: "flex", gap: 0, marginBottom: 24, borderRadius: 10, overflow: "hidden", border: "1.5px solid #D8F0EA" }}>
             {[
               { key: "scenario", label: "Test Scenarios" },
-              userMode === "tester" ? null : { key: "file", label: "Upload File" },
               { key: "build", label: "Build Your Own" },
-            ].filter(Boolean).map(tab => (
+            ].map(tab => (
               <button
                 type="button"
                 key={tab.key}
@@ -1995,8 +2177,11 @@ export default function AskDrFleshner() {
             </div>
           )}
 
-          {/* ════════════════════ MODE: FILE UPLOAD ════════════════════ */}
-          {uploadMode === "file" && (
+          {/* ════════════════════ MODE: FILE UPLOAD (DISABLED) ════════════════════
+              File upload was removed in favour of Test Scenarios + Build Your
+              Own. The block below is kept for reference but never renders
+              because the tab is gone. Safe to delete in a follow-up. */}
+          {false && uploadMode === "file" && (
             <div>
               <p style={{ fontSize: 14, color: "#506D65", margin: "0 0 16px", lineHeight: 1.5 }}>
                 Upload a patient referral file (.txt). The system will parse and validate the clinical data automatically.
@@ -2981,6 +3166,40 @@ export default function AskDrFleshner() {
                 </div>
               </SystemCard>
             )}
+            {/* Tester feedback form. Only shows in tester mode after the
+                consultation has actually completed. Submits to Vercel KV
+                via /api/feedback/submit, indexed by sessionId so the
+                admin view can pull it back. */}
+            {sessionEnded && userMode === "tester" && (
+              feedbackSubmitted ? (
+                <SystemCard icon="✓" title="Thanks — feedback recorded">
+                  <div>That helps a lot. You can run another scenario whenever you're ready.</div>
+                </SystemCard>
+              ) : (
+                <FeedbackForm
+                  form={feedbackForm}
+                  setForm={setFeedbackForm}
+                  submitting={feedbackSubmitting}
+                  onSubmit={async () => {
+                    if (feedbackSubmitting) return;
+                    setFeedbackSubmitting(true);
+                    try {
+                      await fetch("/api/feedback/submit", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ sessionId: currentSessionId, feedback: feedbackForm }),
+                      });
+                      setFeedbackSubmitted(true);
+                    } catch (e) {
+                      console.warn("feedback submit failed:", e);
+                      // Still flip submitted — don't punish the tester for KV outage.
+                      setFeedbackSubmitted(true);
+                    }
+                    setFeedbackSubmitting(false);
+                  }}
+                />
+              )
+            )}
             <div ref={chatEndRef} />
           </div>
 
@@ -3106,6 +3325,13 @@ export default function AskDrFleshner() {
                       setPanelStates({});
                       setFileUploaded(false);
                       setCurrentSessionId(null);
+                      setBookings([]);
+                      setPharmacySent(false);
+                      setFeedbackSubmitted(false);
+                      setFeedbackForm({
+                        clinicalSoundness: 0, outcomeAccuracy: 0, uxRating: 0,
+                        whatBroke: "", recommend: "", otherNotes: "",
+                      });
                       initialContextRef.current = "";
                       setStep("upload");
                     }}
