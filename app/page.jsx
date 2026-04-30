@@ -1737,10 +1737,22 @@ export default function AskDrFleshner() {
             </span>
             
           </div>
-          <div style={{ display: "flex", gap: 24 }}>
+          <div style={{ display: "flex", gap: 24, alignItems: "center" }}>
             <span style={{ fontSize: 13, color: "#506D65" }}>Privacy Policy</span>
             <span style={{ fontSize: 13, color: "#506D65" }}>Terms of Use</span>
             <span style={{ fontSize: 13, color: "#506D65" }}>Accessibility</span>
+            {/* Discreet admin entry. Same visual weight as the placeholder
+                links above so it doesn't draw a tester's eye, but it's
+                always findable from the landing page during the demo. */}
+            <a
+              href="/admin/testers"
+              style={{
+                fontSize: 13, color: "#506D65", textDecoration: "none",
+                borderLeft: "1px solid #D8F0EA", paddingLeft: 24,
+              }}
+            >
+              Admin
+            </a>
           </div>
           <div style={{ fontSize: 13, color: "#506D65" }}>
             © {new Date().getFullYear()} Dr. Neil Fleshner. All rights reserved.
