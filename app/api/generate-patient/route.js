@@ -1,6 +1,9 @@
 export async function POST(request) {
   try {
-    const { condition, conditionLabel } = await request.json();
+    const { condition } = await request.json();
+
+    const VALID_CONDITIONS = { bph: "BPH/LUTS", ed: "Erectile Dysfunction", mh: "Microhematuria" };
+    const safeLabel = VALID_CONDITIONS[condition] || "general urology";
 
     const fieldSpec = condition === "bph"
       ? ',"psa":"","freePsa":"","ua":"","prostateVolume":"","pvr":"","creatinine":"","egfr":""'
@@ -24,7 +27,7 @@ export async function POST(request) {
         max_tokens: 1000,
         messages: [{
           role: "user",
-          content: `Generate a realistic but fictional urology patient referral for ${conditionLabel}. Return ONLY valid JSON (no markdown, no backticks) with these exact keys:
+          content: `Generate a realistic but fictional urology patient referral for ${safeLabel}. Return ONLY valid JSON (no markdown, no backticks) with these exact keys:
 {"name":"","age":"","sex":"","mrn":"","pcp":"","referralReason":"","allergies":"","medicalHistory":"comma-separated","surgicalHistory":"comma-separated","medications":"comma-separated"${fieldSpec}}
 Make it clinically realistic. The patient should be between 40-75 years old. Use Canadian medical conventions (units, drug names). Vary the complexity — sometimes straightforward, sometimes with complicating factors. Generate a unique name.`,
         }],

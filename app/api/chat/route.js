@@ -4,10 +4,16 @@ import mhPrompt from "../../../prompts/mh";
 import unknownPrompt from "../../../prompts/unknown";
 import { saveConversation } from "../../../lib/store";
 import { injectMarkersIntoContent } from "../../../lib/marker-injector";
+import { checkRateLimit } from "../../../lib/rate-limit";
 
 const PROMPTS = { bph: bphPrompt, ed: edPrompt, mh: mhPrompt, unknown: unknownPrompt };
 
 export async function POST(request) {
+  const { limited } = checkRateLimit(request);
+  if (limited) {
+    return Response.json({ error: "Too many requests. Please wait a moment." }, { status: 429 });
+  }
+
   try {
     const { messages, condition, conversationId, patientInfo } = await request.json();
     const systemPrompt = PROMPTS[condition] || PROMPTS.unknown;

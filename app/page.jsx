@@ -385,7 +385,7 @@ function parsePatientFile(text) {
 function renderMarkdown(text) {
   if (!text) return "";
   // Escape HTML entities first to prevent XSS via AI responses
-  text = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  text = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   return text
     // Headers → bold text on its own line
     .replace(/^#{1,3}\s+(.+)$/gm, "<strong>$1</strong>")
@@ -627,6 +627,8 @@ export default function AskDrFleshner() {
   const [patientData, setPatientData] = useState(null);
   const [rawFileText, setRawFileText] = useState("");
   const [messages, setMessages] = useState([]);
+  const messagesRef = useRef(messages);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [fileUploaded, setFileUploaded] = useState(false);
@@ -759,8 +761,9 @@ export default function AskDrFleshner() {
       ...prev,
       [messageIndex]: { submitted: true, response: responseText },
     }));
+    setIsLoading(true);
     setTimeout(() => {
-      sendToAPI(messages, responseText, true, true);
+      sendToAPI(messagesRef.current, responseText, true, true);
     }, 300);
   };
 
@@ -1777,6 +1780,7 @@ export default function AskDrFleshner() {
       setPatientData(parsed);
 
       // Detect condition server-side to keep classification logic hidden
+      setIsLoading(true);
       try {
         const res = await fetch("/api/detect-condition", {
           method: "POST",
@@ -1791,6 +1795,7 @@ export default function AskDrFleshner() {
       } catch {
         setDetectedCondition("unknown");
       }
+      setIsLoading(false);
 
       setFileUploaded(true);
     };
@@ -1816,6 +1821,7 @@ export default function AskDrFleshner() {
       const text = ev.target.result;
       const parsed = parsePatientFile(text);
       let condition = "unknown";
+      setIsLoading(true);
       try {
         const res = await fetch("/api/detect-condition", {
           method: "POST",
@@ -1828,6 +1834,7 @@ export default function AskDrFleshner() {
         const result = await res.json();
         condition = result.condition;
       } catch { /* fallback to unknown */ }
+      setIsLoading(false);
       const newScenario = {
         id: `custom-${Date.now()}`,
         condition: condition,
@@ -2636,6 +2643,9 @@ export default function AskDrFleshner() {
         }),
       });
 
+      if (!response.ok) {
+        throw new Error(`API returned ${response.status}`);
+      }
       const data = await response.json();
       const assistantRaw = data.content
         ?.filter((b) => b.type === "text")
@@ -2801,7 +2811,8 @@ export default function AskDrFleshner() {
 
   // ── EMAIL SOAP NOTE ──
   const sendSoapEmail = async () => {
-    if (!doctorEmail.trim()) return;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!doctorEmail.trim() || !emailRegex.test(doctorEmail.trim())) return;
     setEmailSending(true);
 
     const patientName = patientData?.name || `${firstName} ${lastName}`;

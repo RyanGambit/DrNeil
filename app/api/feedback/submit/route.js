@@ -8,6 +8,6 @@ export async function POST(request) {
     return Response.json(result);
   } catch (err) {
     console.error("feedback/submit error:", err);
-    return Response.json({ error: err.message || "submit failed" }, { status: 500 });
+    return Response.json({ error: "submit failed" }, { status: 500 });
   }
 }
