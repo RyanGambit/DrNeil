@@ -1400,6 +1400,7 @@ export default function AskDrFleshner() {
           }),
         });
 
+        if (!response.ok) return;
         const parsed = await response.json();
         if (parsed && typeof parsed === "object" && !parsed.error) setClinicalState(parsed);
       } catch (err) {
