@@ -851,7 +851,7 @@ export default function AskDrFleshner() {
                   background: isFlagged ? T.confirmFlagBg : T.surface,
                   color: isFlagged ? T.confirmFlag : T.textSecondary,
                   transition: "all 0.15s ease",
-                }}>{isFlagged ? "⚑ Flagged" : "Flag"}</button>
+                }}>{isFlagged ? "⚑ Flagged" : "Not right"}</button>
               </div>
             </div>
           );
@@ -2666,7 +2666,7 @@ export default function AskDrFleshner() {
         ...prev,
         {
           role: "assistant",
-          text: "I'm having trouble connecting right now. Please try again in a moment.",
+          text: "I'm having trouble connecting right now. Don't worry — your conversation is still here. Please try again in a moment.",
           time: new Date(),
         },
       ]);
@@ -2854,7 +2854,7 @@ export default function AskDrFleshner() {
             <div style={styles.soapLoadingWrap}>
               <div style={styles.soapSpinner} />
               <p style={{ color: "#4B5563", fontSize: 15, marginTop: 16 }}>
-                Generating clinical documentation...
+                Preparing your visit summary...
               </p>
             </div>
           ) : (
@@ -2934,7 +2934,7 @@ export default function AskDrFleshner() {
         <div style={{ flex: 1, minWidth: 0 }}>
           <h2 style={{ ...styles.chatHeaderName, fontSize: isMobile ? 14 : 16 }}>Dr. Neil Fleshner</h2>
           <p style={{ ...styles.chatHeaderStatus, fontSize: isMobile ? 11 : 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-            {isLoading ? "Typing..." : `${CONDITION_LABELS[detectedCondition] || "Virtual Consultation"}`}
+            {isLoading ? "Dr. Fleshner is typing..." : `${CONDITION_LABELS[detectedCondition] || "Virtual Consultation"}`}
           </p>
         </div>
         {/* Tester-mode role chip — sits in the header so the evaluator
