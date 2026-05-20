@@ -80,15 +80,15 @@ The full unabridged prompts should be pasted here (no size limit on server-side)
 ## Admin Access
 
 Navigate to `/admin` and log in with the credentials from your environment variables.
-Default: `admin` / `drfleshner2026`
+Both `ADMIN_USERNAME` and `ADMIN_PASSWORD` must be set on the server — there is no default.
 
 ## Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
 | `ANTHROPIC_API_KEY` | Yes | Your Anthropic API key |
-| `ADMIN_USERNAME` | No | Admin login (default: admin) |
-| `ADMIN_PASSWORD` | No | Admin password (default: drfleshner2026) |
+| `ADMIN_USERNAME` | Yes | Admin login username |
+| `ADMIN_PASSWORD` | Yes | Admin login password |
 
 ## Demo Patients
 
