@@ -4,20 +4,28 @@ import { useState, useEffect } from "react";
 
 export default function AdminDashboard() {
   const [credentials, setCredentials] = useState({ username: "", password: "" });
+  const [authHeader, setAuthHeader] = useState(null);
   const [authed, setAuthed] = useState(false);
   const [conversations, setConversations] = useState([]);
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const authHeader = "Basic " + btoa(`${credentials.username}:${credentials.password}`);
+  // btoa() throws on code points > 0xFF, so encode UTF-8 bytes first.
+  const buildAuthHeader = (username, password) => {
+    const bytes = new TextEncoder().encode(`${username}:${password}`);
+    let binary = "";
+    for (const b of bytes) binary += String.fromCharCode(b);
+    return "Basic " + btoa(binary);
+  };
 
-  const fetchConversations = async () => {
+  const fetchConversations = async (header = authHeader) => {
+    if (!header) return;
     setLoading(true);
     setError(null);
     try {
       const res = await fetch("/api/admin/conversations", {
-        headers: { Authorization: authHeader },
+        headers: { Authorization: header },
       });
       if (res.status === 401) {
         setAuthed(false);
@@ -35,7 +43,13 @@ export default function AdminDashboard() {
 
   const handleLogin = (e) => {
     e.preventDefault();
-    fetchConversations();
+    try {
+      const header = buildAuthHeader(credentials.username, credentials.password);
+      setAuthHeader(header);
+      fetchConversations(header);
+    } catch {
+      setError("Username or password contains an invalid character");
+    }
   };
 
   const conditionColors = {
@@ -99,7 +113,7 @@ export default function AdminDashboard() {
             </h1>
           </div>
           <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-            <button onClick={fetchConversations} style={{ ...styles.btnSmall, background: "#1A6B5B", color: "#fff" }}>
+            <button onClick={() => fetchConversations()} style={{ ...styles.btnSmall, background: "#1A6B5B", color: "#fff" }}>
               Refresh
             </button>
             <span style={{ fontSize: 14, color: "#506D65" }}>
