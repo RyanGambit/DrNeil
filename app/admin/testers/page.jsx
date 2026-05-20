@@ -40,6 +40,7 @@ function fmtDuration(ms) {
 
 export default function AdminTesters() {
   const [credentials, setCredentials] = useState({ username: "", password: "" });
+  const [authHeader, setAuthHeader] = useState(null);
   const [authed, setAuthed] = useState(false);
   const [testers, setTesters] = useState([]);
   const [expanded, setExpanded] = useState(null);
@@ -48,16 +49,20 @@ export default function AdminTesters() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const authHeader =
-    "Basic " + (typeof window !== "undefined"
-      ? btoa(`${credentials.username}:${credentials.password}`)
-      : "");
+  // btoa() throws on code points > 0xFF, so encode UTF-8 bytes first.
+  const buildAuthHeader = (username, password) => {
+    const bytes = new TextEncoder().encode(`${username}:${password}`);
+    let binary = "";
+    for (const b of bytes) binary += String.fromCharCode(b);
+    return "Basic " + btoa(binary);
+  };
 
-  const fetchTesters = async () => {
+  const fetchTesters = async (header = authHeader) => {
+    if (!header) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/admin/testers", { headers: { Authorization: authHeader } });
+      const res = await fetch("/api/admin/testers", { headers: { Authorization: header } });
       if (res.status === 401) {
         setAuthed(false);
         setError("Invalid credentials");
@@ -72,10 +77,21 @@ export default function AdminTesters() {
     setLoading(false);
   };
 
+  const handleLogin = (e) => {
+    e.preventDefault();
+    try {
+      const header = buildAuthHeader(credentials.username, credentials.password);
+      setAuthHeader(header);
+      fetchTesters(header);
+    } catch {
+      setError("Username or password contains an invalid character");
+    }
+  };
+
   if (!authed) {
     return (
       <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", background: "#F5FBF9", fontFamily: "-apple-system, 'Segoe UI', sans-serif" }}>
-        <form onSubmit={(e) => { e.preventDefault(); fetchTesters(); }} style={{ background: "#fff", padding: 32, borderRadius: 12, border: "1px solid #D8F0EA", boxShadow: "0 2px 16px rgba(26,107,91,0.06)", width: 360 }}>
+        <form onSubmit={handleLogin} style={{ background: "#fff", padding: 32, borderRadius: 12, border: "1px solid #D8F0EA", boxShadow: "0 2px 16px rgba(26,107,91,0.06)", width: 360 }}>
           <h1 style={{ fontSize: 22, color: "#1F2937", margin: "0 0 6px", fontFamily: "'Georgia', serif" }}>Tester admin</h1>
           <p style={{ fontSize: 13, color: "#506D65", margin: "0 0 20px" }}>Demo testers and their session activity.</p>
           <input
@@ -103,7 +119,7 @@ export default function AdminTesters() {
     <div style={{ minHeight: "100vh", background: "#F5FBF9", fontFamily: "-apple-system, 'Segoe UI', sans-serif" }}>
       <header style={{ background: "#fff", borderBottom: "1px solid #D8F0EA", padding: "16px 32px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h1 style={{ fontSize: 20, color: "#1F2937", margin: 0, fontFamily: "'Georgia', serif" }}>Tester admin</h1>
-        <button type="button" onClick={fetchTesters} disabled={loading} style={{ padding: "8px 14px", border: "1.5px solid #1A6B5B", background: "#fff", color: "#1A6B5B", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+        <button type="button" onClick={() => fetchTesters()} disabled={loading} style={{ padding: "8px 14px", border: "1.5px solid #1A6B5B", background: "#fff", color: "#1A6B5B", borderRadius: 6, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
           {loading ? "Refreshing…" : "Refresh"}
         </button>
       </header>
