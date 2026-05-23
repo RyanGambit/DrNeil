@@ -31,6 +31,15 @@ const PLAYBOOK = process.env.PLAYBOOK_OVERRIDES
       chipText: r.chipText,
     }))
   : [];
+
+// Edge-case injection: at the Nth assistant turn (1-indexed), bypass the
+// simulator and type the supplied text. After injection, continue for
+// `EDGE_CASE_CONTINUE` more turns to capture how the AI handles it.
+// Used by edge-case-runner to exercise disruptive patient inputs.
+const EDGE_INJECT = process.env.EDGE_CASE_INJECT
+  ? JSON.parse(process.env.EDGE_CASE_INJECT)
+  : null;
+const EDGE_MAX_TURNS_AFTER = parseInt(process.env.EDGE_CASE_CONTINUE || "2", 10);
 const MAX_TURNS = 80;
 const ASSISTANT_TIMEOUT_MS = 60_000;
 
@@ -352,6 +361,8 @@ console.log(`Expected: ${scenario.label}\n`);
   console.log("[5] Driving conversation...\n");
   let lastAssistantCount = 0;
   let usage = { input_tokens: 0, output_tokens: 0 };
+  let injectionFired = false;
+  let turnsAfterInjection = 0;
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
     try {
@@ -378,7 +389,27 @@ console.log(`Expected: ${scenario.label}\n`);
     const { chips } = await readChipsAndCard();
     if (chips) console.log(`        chips: [${chips.map(c => c.length > 30 ? c.slice(0, 27) + "…" : c).join(" | ")}]`);
 
-    let { text, chipPicked, usage: u } = await generatePatientReply(scenario, messages, chips);
+    let text, chipPicked, u;
+    // Edge-case injection: at the configured assistant-turn count, skip the
+    // simulator and type the disruption directly. Then count down extra
+    // turns and exit so we don't waste API calls on the rest of the consult.
+    if (EDGE_INJECT && !injectionFired && lastAssistantCount === EDGE_INJECT.injectAtAssistantTurn) {
+      console.log(`  [edge-case] INJECT at turn ${lastAssistantCount}: "${EDGE_INJECT.userInput}"`);
+      text = EDGE_INJECT.userInput;
+      chipPicked = null;
+      injectionFired = true;
+    } else if (injectionFired) {
+      // After injection: let the simulator respond normally so we see how
+      // the AI handles a continuation. Stop after the configured count.
+      if (turnsAfterInjection >= EDGE_MAX_TURNS_AFTER) {
+        console.log(`  [edge-case] reached ${EDGE_MAX_TURNS_AFTER} post-injection turns, stopping`);
+        break;
+      }
+      turnsAfterInjection++;
+      ({ text, chipPicked, usage: u } = await generatePatientReply(scenario, messages, chips));
+    } else {
+      ({ text, chipPicked, usage: u } = await generatePatientReply(scenario, messages, chips));
+    }
     if (u) { usage.input_tokens += u.input_tokens || 0; usage.output_tokens += u.output_tokens || 0; }
 
     // Playbook override: if the AI's current message matches a playbook
