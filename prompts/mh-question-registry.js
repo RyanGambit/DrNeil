@@ -49,6 +49,28 @@ const MH_QUESTION_REGISTRY = [
   },
 
   {
+    id: "opening-safety-followup",
+    phase: 1,
+    question: "Thanks for letting me know. Can you tell me which one you've been experiencing?",
+    chips: [
+      "Blood I could actually see",
+      "Fever or chills",
+      "Bad pain in my side or back",
+      "Couldn't pee at all"
+    ],
+    layout: "horizontal",
+    condition: null,
+    progressCue: null,
+    routing: {
+      "Blood I could actually see": "path3_assess_urgency",
+      "Fever or chills": "walkin_clinic",
+      "Bad pain in my side or back": "er_referral",
+      "Couldn't pee at all": "er_referral"
+    },
+    notes: "Only shown after patient answers 'Yes — one or more of these' on opening-safety-screen. AI routes based on specific flag. Visible blood alone → Path 3 + assess if acute (not necessarily ER)."
+  },
+
+  {
     id: "opening-ready",
     phase: 1,
     question: "I'm going to ask you some questions about your background and health history. This helps me figure out how carefully we need to look into this. Most of the questions are quick.\n\nReady to get started?",

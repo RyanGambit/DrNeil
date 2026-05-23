@@ -40,6 +40,30 @@ const BPH_QUESTION_REGISTRY = [
   },
 
   {
+    id: "opening-safety-followup",
+    phase: 1,
+    question: "Thanks for letting me know. Can you tell me which one you've been experiencing?",
+    chips: [
+      "Burning when I pee",
+      "Blood in my pee",
+      "Fever or chills",
+      "Bad pain in my back or side",
+      "Couldn't pee at all"
+    ],
+    layout: "horizontal",
+    condition: null,
+    progressCue: null,
+    routing: {
+      "Burning when I pee": "continue_with_note",
+      "Blood in my pee": "outcome_c_inperson",
+      "Fever or chills": "walkin_clinic",
+      "Bad pain in my back or side": "er_referral",
+      "Couldn't pee at all": "er_referral"
+    },
+    notes: "Only shown after patient answers 'Yes — one or more of these' on opening-safety-screen. AI routes based on the specific flag selected using tiered red flag routing."
+  },
+
+  {
     id: "opening-ready",
     phase: 1,
     question: "I'm going to take you through some questions about your symptoms. Some might seem detailed, but they help me understand exactly what's going on. Then we'll talk about what to do about it.\n\nReady to get started?",

@@ -1032,7 +1032,12 @@ Ask EXACTLY: "Before we get started — have you had any chest pain during or af
 Chip options: "No, none of those" / "Yes — one or more of these"
 Append: <!-- qid:opening-safety-screen -->
 
-If any YES → URGENT ESCALATION
+If any YES → ask which one using the follow-up chips:
+Ask EXACTLY: "Thanks for letting me know. Can you tell me which one you've been experiencing?"
+Chips: "Chest pain during or after sex" / "Erection that wouldn't go down" / "Injury to the penis"
+Append: <!-- qid:opening-safety-followup -->
+
+Then route based on their answer → URGENT ESCALATION for all ED red flags.
 
 STEP 3 — INTERVIEW CONTRACT
 

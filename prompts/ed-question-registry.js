@@ -39,6 +39,26 @@ const ED_QUESTION_REGISTRY = [
   },
 
   {
+    id: "opening-safety-followup",
+    phase: 1,
+    question: "Thanks for letting me know. Can you tell me which one you've been experiencing?",
+    chips: [
+      "Chest pain during or after sex",
+      "Erection that wouldn't go down",
+      "Injury to the penis"
+    ],
+    layout: "horizontal",
+    condition: null,
+    progressCue: null,
+    routing: {
+      "Chest pain during or after sex": "urgent_escalation",
+      "Erection that wouldn't go down": "urgent_escalation",
+      "Injury to the penis": "urgent_escalation"
+    },
+    notes: "Only shown after patient answers 'Yes — one or more of these' on opening-safety-screen. All ED red flags route to urgent escalation."
+  },
+
+  {
     id: "opening-ready",
     phase: 1,
     question: "I'm going to ask you some questions about what's been going on. Some might feel personal, but they help me understand the full picture. There are no wrong answers.\n\nReady to get started?",

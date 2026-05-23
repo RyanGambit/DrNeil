@@ -1043,7 +1043,12 @@ Ask EXACTLY: "Before we get started — have you seen blood in your pee that you
 Chips: "No, none of those" / "Yes — one or more of these"
 Append: <!-- qid:opening-safety-screen -->
 
-If YES → Use TIERED EMERGENCY ROUTING:
+If YES → ask which one using the follow-up chips:
+Ask EXACTLY: "Thanks for letting me know. Can you tell me which one you've been experiencing?"
+Chips: "Blood I could actually see" / "Fever or chills" / "Bad pain in my side or back" / "Couldn't pee at all"
+Append: <!-- qid:opening-safety-followup -->
+
+Then use TIERED EMERGENCY ROUTING based on their answer:
 - Can't pee at all → ER
 - Severe flank/back pain → ER
 - Gross hematuria with clots + difficulty voiding → ER

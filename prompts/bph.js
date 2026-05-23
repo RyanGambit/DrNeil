@@ -890,11 +890,17 @@ Ask EXACTLY: "Before we get started — any burning when you pee, any blood in y
 Chips: "No, none of those" / "Yes — one or more of these"
 Append: <!-- qid:opening-safety-screen -->
 
-If any YES → Use TIERED RED FLAG ROUTING (see Red Flags section above):
+If any YES → ask which one using the follow-up chips:
+Ask EXACTLY: "Thanks for letting me know. Can you tell me which one you've been experiencing?"
+Chips: "Burning when I pee" / "Blood in my pee" / "Fever or chills" / "Bad pain in my back or side" / "Couldn't pee at all"
+Append: <!-- qid:opening-safety-followup -->
+
+Then use TIERED RED FLAG ROUTING based on their answer (see Red Flags section above):
 - Can't pee at all → ER
 - Severe pain → ER
 - Fever/chills → Walk-in clinic
 - Blood in pee → Outcome C (in-person)
+- Burning → note and continue (not an emergency)
 
 STEP 3 — INTERVIEW CONTRACT
 
