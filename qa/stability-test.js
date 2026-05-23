@@ -69,7 +69,18 @@ const findings = [];
       await new Promise(r => setTimeout(r, 1500)); // catch deferred warnings
       await page.screenshot({ path: path.join(SHOTS_DIR, `${vp.name}-01-landing.png`), fullPage: false });
 
-      // 2. Welcome → name entry → Start.
+      // 2. Mode selection → name entry → Start.
+      // Click "I'm here to evaluate the tool" to enter tester mode.
+      const modeClicked = await page.evaluate(() => {
+        const btn = [...document.querySelectorAll("button")].find(b =>
+          /evaluate the tool/i.test(b.textContent)
+        );
+        if (btn) { btn.click(); return true; }
+        return false;
+      });
+      if (!modeClicked) throw new Error("Mode selection button not found");
+      await new Promise(r => setTimeout(r, 800));
+
       // React controlled inputs ignore .value = ... assignment because
       // their value descriptor is shadowed. page.type() simulates real
       // keystrokes which fires React's onChange properly.

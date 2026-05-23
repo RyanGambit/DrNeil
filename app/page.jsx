@@ -3023,7 +3023,9 @@ export default function AskDrFleshner() {
 
                     // confirm-panel → intake confirmation (the ONE stacked exception)
                     if (entry.type === "confirm-panel") {
-                      return <ConfirmPanel fields={parseConfirmFields(msg.text)} messageIndex={i} />;
+                      const confirmFields = parseConfirmFields(msg.text);
+                      if (confirmFields.length === 0) return null;
+                      return <ConfirmPanel fields={confirmFields} messageIndex={i} />;
                     }
 
                     // chips: null → open-text question, no ResponseCard rendered
@@ -3062,7 +3064,7 @@ export default function AskDrFleshner() {
                     // If a registry-driven panel will render, skip the hint.
                     if (detectedCondition === "ed" || detectedCondition === "bph" || detectedCondition === "mh") {
                       const entry = resolveEntry(msg, displayMessages, i, detectedCondition);
-                      if (entry?.type === "confirm-panel") return null;
+                      if (entry?.type === "confirm-panel" && parseConfirmFields(msg.text).length > 0) return null;
                       if (entry?.chips?.length) return null;
                     }
                     return (
