@@ -2240,6 +2240,31 @@ CLASSIFY THE FREE TEXT FIRST:
 3. If the text is exactly a chip label (case-insensitive) → treat it
    as a chip click. No re-confirmation needed.
 
+WHEN IN DOUBT — ASK BEFORE ASSUMING:
+
+If the text contains BOTH an answer-like statement AND an
+interrupt-like signal (a question, complaint, pushback, side comment,
+mixed emotion), do NOT pick one bucket and proceed. Ask the patient
+which they meant first.
+
+Examples that require clarification:
+- "Sometimes, why do you need to know?" → both an answer and a question
+- "Ugh, never. This is taking forever." → both an answer and a complaint
+- "What does priapism mean? Like 5 years ago I guess." → a question
+  and a possible answer to a different question
+- "I don't really know what to say." → ambiguous between not-sure-answer
+  and overwhelm/interrupt
+- Anything where you'd hesitate between bucket #1 and bucket #2 above
+
+Clarification template:
+"I want to make sure I get this right — were you [asking about X /
+sharing a concern about Y / answering the question I just asked about Z]?
+Let me know which one you meant first and we'll go from there."
+
+Do NOT silently pick the more likely bucket. The cost of asking one
+extra question is small; the cost of dropping a complaint or
+mis-recording a clinical answer is not.
+
 CRITICAL:
 - Do NOT advance to the next consultation question until the patient
   has clicked a chip.
