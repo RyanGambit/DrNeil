@@ -274,9 +274,31 @@ const MH_QUESTION_REGISTRY = [
     condition: "gross_hematuria == Yes",
     progressCue: null,
     routing: {
-      "In the last few weeks": "assess_if_acute"
+      "In the last few weeks": "ask_currently_ongoing",
+      "A few months ago": "continue",
+      "More than a year ago": "continue"
     },
-    notes: "If currently ongoing with clots or difficulty voiding → emergency routing."
+    notes: "If recent (last few weeks) → ask follow-up about whether it's still happening and whether there are clots/difficulty voiding. Otherwise continue."
+  },
+
+  {
+    id: "risk-q2b-gross-current",
+    phase: 3,
+    question: "Is it still happening, and if so, are you seeing clots or having trouble peeing?",
+    chips: [
+      "Yes, with clots or trouble peeing",
+      "Yes, but no clots or trouble",
+      "No, it's stopped"
+    ],
+    layout: "horizontal",
+    condition: "gross_hematuria_recent == Yes",
+    progressCue: null,
+    routing: {
+      "Yes, with clots or trouble peeing": "er_referral",
+      "Yes, but no clots or trouble": "continue",
+      "No, it's stopped": "continue"
+    },
+    notes: "Only asked when patient answered 'In the last few weeks' on risk-q2a-gross-when. Clots or difficulty voiding → emergency (Outcome E). Otherwise high-risk for full Path 3 workup but not emergency."
   },
 
   {

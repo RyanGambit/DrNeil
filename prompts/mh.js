@@ -1203,7 +1203,16 @@ IF "Yes": This is a PATH 3 trigger regardless of all other factors. Ask follow-u
 Q2a — Ask EXACTLY: "When was the last time that happened?"
 Chips: "In the last few weeks" / "A few months ago" / "More than a year ago"
 Append: <!-- qid:risk-q2a-gross-when -->
-If currently ongoing with clots or difficulty voiding → emergency routing.
+
+IF "In the last few weeks":
+Q2b — Ask EXACTLY: "Is it still happening, and if so, are you seeing clots or having trouble peeing?"
+Chips: "Yes, with clots or trouble peeing" / "Yes, but no clots or trouble" / "No, it's stopped"
+Append: <!-- qid:risk-q2b-gross-current -->
+
+Routing on Q2b:
+- "Yes, with clots or trouble peeing" → emergency routing (Outcome E)
+- "Yes, but no clots or trouble" → continue (Path 3 still triggered by Q2)
+- "No, it's stopped" → continue (Path 3 still triggered by Q2)
 
 IF "No, never": Record. Move on.
 
