@@ -18,7 +18,19 @@ const { generatePatientReply, cleanText } = require("./patient-sim");
 const SCENARIO_ID = process.argv[2] || "ed-1";
 const BASE_URL = process.env.SMOKE_BASE_URL || "http://localhost:3000";
 const OUT_DIR = path.resolve(__dirname, "..", "qa-findings");
-const OUT_FILE = path.join(OUT_DIR, `smoke-test-${SCENARIO_ID}.json`);
+const OUT_SUFFIX = process.env.SMOKE_OUT_SUFFIX || ""; // for variant runs
+const OUT_FILE = path.join(OUT_DIR, `smoke-test-${SCENARIO_ID}${OUT_SUFFIX}.json`);
+
+// Playbook overrides: when an AI message matches `triggerRegex`, force the
+// patient to pick `chipText` instead of letting the simulator decide. The
+// chipText must exist in the current chips. Used by branch-runner to drive
+// non-happy paths without inventing new scenarios.
+const PLAYBOOK = process.env.PLAYBOOK_OVERRIDES
+  ? JSON.parse(process.env.PLAYBOOK_OVERRIDES).map((r) => ({
+      triggerRegex: new RegExp(r.triggerRegex, "i"),
+      chipText: r.chipText,
+    }))
+  : [];
 const MAX_TURNS = 80;
 const ASSISTANT_TIMEOUT_MS = 60_000;
 
@@ -100,7 +112,19 @@ console.log(`Expected: ${scenario.label}\n`);
   await page.goto(BASE_URL, { waitUntil: "networkidle0", timeout: 30_000 });
   await shot("01-welcome");
 
-  console.log("[2] Welcome screen — entering name...");
+  console.log("[2] Welcome screen — selecting tester mode + entering name...");
+  // Mode selection step: click "I'm here to evaluate the tool" first.
+  await page.waitForFunction(
+    () => [...document.querySelectorAll("button")].some((b) => /evaluate the tool/i.test(b.textContent)),
+    { timeout: 10_000 },
+  );
+  const modeClicked = await page.evaluate(() => {
+    const btn = [...document.querySelectorAll("button")].find((b) => /evaluate the tool/i.test(b.textContent));
+    if (btn) { btn.click(); return true; }
+    return false;
+  });
+  if (!modeClicked) throw new Error("Could not click 'I'm here to evaluate the tool' button");
+  await new Promise((r) => setTimeout(r, 600));
   await page.waitForSelector("#welcome-first-name", { timeout: 10_000 });
   const [firstName, ...rest] = scenario.data.name.split(" ");
   const lastName = rest.join(" ") || "Patient";
@@ -354,8 +378,25 @@ console.log(`Expected: ${scenario.label}\n`);
     const { chips } = await readChipsAndCard();
     if (chips) console.log(`        chips: [${chips.map(c => c.length > 30 ? c.slice(0, 27) + "…" : c).join(" | ")}]`);
 
-    const { text, chipPicked, usage: u } = await generatePatientReply(scenario, messages, chips);
+    let { text, chipPicked, usage: u } = await generatePatientReply(scenario, messages, chips);
     if (u) { usage.input_tokens += u.input_tokens || 0; usage.output_tokens += u.output_tokens || 0; }
+
+    // Playbook override: if the AI's current message matches a playbook
+    // trigger and the requested chip is on offer, force that choice. Each
+    // rule fires at most once per run so a playbook can specify a sequence.
+    for (let i = 0; i < PLAYBOOK.length; i++) {
+      const rule = PLAYBOOK[i];
+      if (!rule || !rule.triggerRegex.test(lastAssistant.text)) continue;
+      if (!chips || !chips.includes(rule.chipText)) {
+        console.log(`  [playbook] rule matched but chip "${rule.chipText}" not on offer — skipping`);
+        continue;
+      }
+      console.log(`  [playbook] override → "${rule.chipText}"`);
+      chipPicked = rule.chipText;
+      text = rule.chipText;
+      PLAYBOOK[i] = null; // consume the rule
+      break;
+    }
 
     console.log(`  [Pt] ${text}\n`);
 
