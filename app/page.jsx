@@ -650,6 +650,9 @@ export default function AskDrFleshner() {
   // below flips it to true on desktop. Avoids the hydration mismatch that
   // fired four React errors (#418/#423/#425) on every page load.
   const [dashboardOpen, setDashboardOpen] = useState(false);
+  // Restart-confirmation modal. Shown when the patient clicks "Restart" in
+  // the chat header. Discards all consultation state and returns to upload.
+  const [showRestartConfirm, setShowRestartConfirm] = useState(false);
   const [uploadMode, setUploadMode] = useState("scenario"); // "file" | "scenario" | "build"
   // userMode is "patient" (the original flow — file upload, build, scenarios)
   // or "tester" (a clinician/reviewer evaluating the tool — scenarios + build only,
@@ -2777,6 +2780,35 @@ export default function AskDrFleshner() {
     }
   };
 
+  // Reset all per-consultation state and return to the upload/scenario step.
+  // Tester identity (firstName/lastName/role/testerId) and userMode are
+  // preserved so a tester doesn't have to re-pick mode + re-type their name.
+  // Used by the mid-session Restart button and the post-session "Try another
+  // scenario" button — keep behavior consistent across both entry points.
+  const resetConsultation = () => {
+    setMessages([]);
+    setPatientData(null);
+    setRawFileText("");
+    setDetectedCondition(null);
+    setSessionEnded(false);
+    setSoapAutoTriggered(false);
+    setSoapNote("");
+    setSoapLoading(false);
+    setClinicalState(null);
+    setPanelStates({});
+    setFileUploaded(false);
+    setCurrentSessionId(null);
+    setBookings([]);
+    setPharmacySent(false);
+    setFeedbackSubmitted(false);
+    setFeedbackForm({
+      clinicalSoundness: 0, outcomeAccuracy: 0, uxRating: 0,
+      whatBroke: "", recommend: "", otherNotes: "",
+    });
+    initialContextRef.current = "";
+    setStep("upload");
+  };
+
   // ── SOAP NOTE GENERATION ──
   const endConsultation = async () => {
     setSoapLoading(true);
@@ -2982,12 +3014,95 @@ export default function AskDrFleshner() {
         >
           {isMobile ? (dashboardOpen ? "✕" : "📊") : (dashboardOpen ? "Hide" : "Show") + " Dashboard"}
         </button>
+        {messages.length >= 2 && !sessionEnded && (
+          <button
+            type="button"
+            aria-label="Restart consultation"
+            title="Discard this consultation and start over"
+            style={{
+              ...styles.endConsultBtn,
+              background: "transparent",
+              border: "1.5px solid #506D65",
+              color: "#506D65",
+              marginRight: isMobile ? 4 : 8,
+              padding: isMobile ? "8px 12px" : "10px 14px",
+              minHeight: 44,
+              fontSize: isMobile ? 12 : 13,
+            }}
+            onClick={() => setShowRestartConfirm(true)}
+            disabled={isLoading}
+          >
+            {isMobile ? "↺" : "↺ Restart"}
+          </button>
+        )}
         {messages.length >= 2 && (
           <button type="button" aria-label="End consultation and generate visit summary" style={{ ...styles.endConsultBtn, padding: isMobile ? "8px 12px" : "10px 14px", minHeight: 44, fontSize: isMobile ? 12 : 13 }} onClick={endConsultation} disabled={isLoading}>
             {isMobile ? "End" : "End & Generate SOAP"}
           </button>
         )}
       </div>
+
+      {/* Restart confirmation modal. Shown when patient clicks ↺ Restart in
+          the chat header. Discards the current consultation. */}
+      {showRestartConfirm && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="restart-modal-title"
+          style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            zIndex: 1000, padding: 16,
+          }}
+          onClick={() => setShowRestartConfirm(false)}
+        >
+          <div
+            style={{
+              background: "#fff", borderRadius: 12, padding: 24,
+              maxWidth: 440, width: "100%", boxShadow: "0 10px 40px rgba(0,0,0,0.2)",
+              fontFamily: "-apple-system, 'Segoe UI', sans-serif",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="restart-modal-title" style={{ margin: "0 0 12px", fontSize: 18, color: "#1F2937" }}>
+              Restart consultation?
+            </h3>
+            <p style={{ margin: "0 0 20px", fontSize: 15, color: "#506D65", lineHeight: 1.5 }}>
+              This will discard your current conversation and return you to the start.
+              Your answers so far won't be saved.
+            </p>
+            <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={() => setShowRestartConfirm(false)}
+                style={{
+                  padding: "10px 18px", minHeight: 44, borderRadius: 22,
+                  background: "transparent", border: "1.5px solid #506D65",
+                  color: "#506D65", fontWeight: 600, fontSize: 15, cursor: "pointer",
+                  fontFamily: "-apple-system, 'Segoe UI', sans-serif",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRestartConfirm(false);
+                  resetConsultation();
+                }}
+                style={{
+                  padding: "10px 18px", minHeight: 44, borderRadius: 22,
+                  background: "#1A6B5B", color: "#fff", border: "none",
+                  fontWeight: 600, fontSize: 15, cursor: "pointer",
+                  fontFamily: "-apple-system, 'Segoe UI', sans-serif",
+                }}
+              >
+                Yes, restart
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main area: Chat + Dashboard */}
       <main role="main" aria-label="Consultation" style={{ flex: 1, display: "flex", overflow: "hidden", position: "relative" }}>
@@ -3336,31 +3451,7 @@ export default function AskDrFleshner() {
                 {userMode === "tester" && (
                   <button
                     type="button"
-                    onClick={() => {
-                      // Reset all per-consultation state, return to scenario picker.
-                      // Tester identity (firstName/lastName/role/testerId) is preserved.
-                      setMessages([]);
-                      setPatientData(null);
-                      setRawFileText("");
-                      setDetectedCondition(null);
-                      setSessionEnded(false);
-                      setSoapAutoTriggered(false);
-                      setSoapNote("");
-                      setSoapLoading(false);
-                      setClinicalState(null);
-                      setPanelStates({});
-                      setFileUploaded(false);
-                      setCurrentSessionId(null);
-                      setBookings([]);
-                      setPharmacySent(false);
-                      setFeedbackSubmitted(false);
-                      setFeedbackForm({
-                        clinicalSoundness: 0, outcomeAccuracy: 0, uxRating: 0,
-                        whatBroke: "", recommend: "", otherNotes: "",
-                      });
-                      initialContextRef.current = "";
-                      setStep("upload");
-                    }}
+                    onClick={resetConsultation}
                     style={{
                       padding: "10px 20px", minHeight: 44, borderRadius: 22,
                       background: "#1A6B5B", color: "#fff", border: "none",
