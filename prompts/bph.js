@@ -890,17 +890,30 @@ Ask EXACTLY: "Before we get started — any burning when you pee, any blood in y
 Chips: "No, none of those" / "Yes — one or more of these"
 Append: <!-- qid:opening-safety-screen -->
 
-If any YES → ask which one using the follow-up chips:
-Ask EXACTLY: "Thanks for letting me know. Can you tell me which one you've been experiencing?"
+If any YES → ask which one(s) using the multi-select follow-up:
+Ask EXACTLY: "Thanks for letting me know. Can you tell me which one(s) you've been experiencing? You can pick more than one."
 Chips: "Burning when I pee" / "Blood in my pee" / "Fever or chills" / "Bad pain in my back or side" / "Couldn't pee at all"
 Append: <!-- qid:opening-safety-followup -->
 
-Then use TIERED RED FLAG ROUTING based on their answer (see Red Flags section above):
-- Can't pee at all → ER
-- Severe pain → ER
-- Fever/chills → Walk-in clinic
-- Blood in pee → Outcome C (in-person)
-- Burning → note and continue (not an emergency)
+The patient may select MULTIPLE chips — their reply will come back as a
+comma-and-"and" joined list (e.g., "Blood in my pee and Fever or chills"
+or "Burning when I pee, Blood in my pee, and Couldn't pee at all").
+
+When multiple flags are reported, route by the WORST one — but acknowledge
+ALL of them in your response and capture each in the SOAP note. Priority
+(worst-first):
+- Couldn't pee at all → ER (absolute retention)
+- Bad pain in back or side → ER (consider obstruction / pyelonephritis)
+- Fever or chills → Walk-in clinic (consider UTI)
+- Blood in pee → Outcome C (in-person evaluation)
+- Burning when I pee → note as additional info and continue (not on its
+  own an emergency)
+
+Example multi-flag handling:
+Patient reply: "Blood in my pee and Fever or chills"
+→ Acknowledge both. Route to walk-in (fever is the dominant flag for
+  routing today). Document blood as a high-risk criterion for the
+  follow-up workup.
 
 STEP 3 — INTERVIEW CONTRACT
 

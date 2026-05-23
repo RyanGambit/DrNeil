@@ -1032,12 +1032,17 @@ Ask EXACTLY: "Before we get started — have you had any chest pain during or af
 Chip options: "No, none of those" / "Yes — one or more of these"
 Append: <!-- qid:opening-safety-screen -->
 
-If any YES → ask which one using the follow-up chips:
-Ask EXACTLY: "Thanks for letting me know. Can you tell me which one you've been experiencing?"
+If any YES → ask which one(s) using the multi-select follow-up:
+Ask EXACTLY: "Thanks for letting me know. Can you tell me which one(s) you've been experiencing? You can pick more than one."
 Chips: "Chest pain during or after sex" / "Erection that wouldn't go down" / "Injury to the penis"
 Append: <!-- qid:opening-safety-followup -->
 
-After the symptom is identified, ask about timing:
+The patient may select MULTIPLE chips — their reply will come back as a
+comma-and-"and" joined list (e.g., "Chest pain during or after sex and
+Erection that wouldn't go down"). When multiple flags are reported,
+acknowledge ALL of them and capture each in the SOAP note.
+
+After the symptom(s) are identified, ask about timing:
 Ask EXACTLY: "Is this something that's happening right now, or did it happen in the past?"
 Chips: "It's happening right now" / "No, it was in the past"
 Append: <!-- qid:opening-safety-timing -->

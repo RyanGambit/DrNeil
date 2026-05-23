@@ -51,14 +51,14 @@ const MH_QUESTION_REGISTRY = [
   {
     id: "opening-safety-followup",
     phase: 1,
-    question: "Thanks for letting me know. Can you tell me which one you've been experiencing?",
+    question: "Thanks for letting me know. Can you tell me which one(s) you've been experiencing? You can pick more than one.",
     chips: [
       "Blood I could actually see",
       "Fever or chills",
       "Bad pain in my side or back",
       "Couldn't pee at all"
     ],
-    layout: "horizontal",
+    layout: "multi-select",
     condition: null,
     progressCue: null,
     routing: {

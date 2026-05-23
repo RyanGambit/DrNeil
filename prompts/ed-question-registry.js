@@ -41,13 +41,13 @@ const ED_QUESTION_REGISTRY = [
   {
     id: "opening-safety-followup",
     phase: 1,
-    question: "Thanks for letting me know. Can you tell me which one you've been experiencing?",
+    question: "Thanks for letting me know. Can you tell me which one(s) you've been experiencing? You can pick more than one.",
     chips: [
       "Chest pain during or after sex",
       "Erection that wouldn't go down",
       "Injury to the penis"
     ],
-    layout: "horizontal",
+    layout: "multi-select",
     condition: null,
     progressCue: null,
     routing: {

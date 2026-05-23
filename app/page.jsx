@@ -1204,14 +1204,42 @@ export default function AskDrFleshner() {
   // The main chat input at the bottom is always available as an escape hatch.
   // Removing the text field prevents patients from going off-script with
   // free-form answers that break the clinical flow.
-  function ResponseCard({ chips, scored, messageIndex }) {
+  function ResponseCard({ chips, scored, multiSelect, messageIndex }) {
     const state = panelStates[messageIndex];
     if (state?.submitted) return null;
+
+    // Multi-select state: which chip indices are currently toggled on.
+    // Submits as a comma-separated list when patient clicks Done. Used for
+    // questions where the patient may legitimately have more than one
+    // answer (e.g., "which red-flag symptoms do you have?").
+    const [selectedIdxs, setSelectedIdxs] = useState([]);
 
     const handleChipTap = (chip) => {
       // Strip letter prefix (a-g) — ED SHIM uses a-e, BPH IPSS uses a-f or a-g.
       const cleanLabel = chip.replace(/^[a-g]\)\s*/i, "");
       handlePanelSubmit(messageIndex, cleanLabel);
+    };
+
+    const toggleMulti = (i) => {
+      setSelectedIdxs((prev) =>
+        prev.includes(i) ? prev.filter((x) => x !== i) : [...prev, i]
+      );
+    };
+
+    const submitMulti = () => {
+      if (!selectedIdxs.length) return;
+      const labels = selectedIdxs
+        .sort((a, b) => a - b)
+        .map((i) => chips[i].replace(/^[a-g]\)\s*/i, ""));
+      // Join with comma + "and" for natural reading; the AI parses the list
+      // and routes worst-first.
+      const text =
+        labels.length === 1
+          ? labels[0]
+          : labels.length === 2
+            ? `${labels[0]} and ${labels[1]}`
+            : `${labels.slice(0, -1).join(", ")}, and ${labels[labels.length - 1]}`;
+      handlePanelSubmit(messageIndex, text);
     };
 
     return (
@@ -1221,8 +1249,65 @@ export default function AskDrFleshner() {
         borderRadius: 16, padding: scored ? "12px 14px" : "14px 16px",
         boxShadow: "0 1px 4px rgba(0,0,0,0.04)", fontFamily: T.font,
       }}>
-        {/* Horizontal chips */}
-        {chips && !scored && (
+        {/* Multi-select chips: toggle on tap, Done submits comma-joined list. */}
+        {chips && multiSelect && (
+          <>
+            <div style={{ fontSize: 14, color: "#5a6175", marginBottom: 8, fontFamily: T.font }}>
+              Select any that apply, then tap Done.
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              {chips.map((chip, i) => {
+                const isSelected = selectedIdxs.includes(i);
+                return (
+                  <button
+                    key={i}
+                    type="button"
+                    aria-pressed={isSelected}
+                    onClick={() => toggleMulti(i)}
+                    style={{
+                      padding: "12px 18px 12px 14px", minHeight: 44, borderRadius: 22,
+                      border: `1.5px solid ${isSelected ? T.accent : T.chipBorder}`,
+                      background: isSelected ? T.accentSoft : "#fff",
+                      color: T.text, fontSize: 15, fontWeight: 500, fontFamily: T.font,
+                      cursor: "pointer", boxShadow: "0 1px 2px rgba(0,0,0,0.04)",
+                      lineHeight: 1.3, transition: "all 0.15s ease",
+                      display: "inline-flex", alignItems: "center", gap: 8,
+                    }}
+                  >
+                    <span aria-hidden="true" style={{
+                      width: 20, height: 20, borderRadius: 4, flexShrink: 0,
+                      border: `1.5px solid ${isSelected ? T.accent : T.chipBorder}`,
+                      background: isSelected ? T.accent : "#fff",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 14, color: "#fff", fontWeight: 700,
+                    }}>{isSelected ? "✓" : ""}</span>
+                    {chip}
+                  </button>
+                );
+              })}
+            </div>
+            <div style={{ marginTop: 12, textAlign: "right" }}>
+              <button
+                type="button"
+                onClick={submitMulti}
+                disabled={!selectedIdxs.length}
+                style={{
+                  padding: "10px 22px", minHeight: 44, borderRadius: 22,
+                  border: "none",
+                  background: selectedIdxs.length ? T.accent : "#cfd6d3",
+                  color: "#fff", fontSize: 15, fontWeight: 600, fontFamily: T.font,
+                  cursor: selectedIdxs.length ? "pointer" : "not-allowed",
+                  boxShadow: selectedIdxs.length ? "0 1px 3px rgba(0,0,0,0.1)" : "none",
+                  transition: "all 0.15s ease",
+                }}
+              >
+                Done{selectedIdxs.length ? ` (${selectedIdxs.length})` : ""}
+              </button>
+            </div>
+          </>
+        )}
+        {/* Horizontal single-select chips (default). */}
+        {chips && !scored && !multiSelect && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             {chips.map((chip, i) => (
               <button key={i} type="button" onClick={() => handleChipTap(chip)} style={{
@@ -3151,6 +3236,7 @@ export default function AskDrFleshner() {
                       <ResponseCard
                         chips={entry.chips}
                         scored={entry.layout === "scored"}
+                        multiSelect={entry.layout === "multi-select"}
                         messageIndex={i}
                       />
                     );

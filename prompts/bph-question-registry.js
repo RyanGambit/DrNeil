@@ -42,7 +42,7 @@ const BPH_QUESTION_REGISTRY = [
   {
     id: "opening-safety-followup",
     phase: 1,
-    question: "Thanks for letting me know. Can you tell me which one you've been experiencing?",
+    question: "Thanks for letting me know. Can you tell me which one(s) you've been experiencing? You can pick more than one.",
     chips: [
       "Burning when I pee",
       "Blood in my pee",
@@ -50,7 +50,7 @@ const BPH_QUESTION_REGISTRY = [
       "Bad pain in my back or side",
       "Couldn't pee at all"
     ],
-    layout: "horizontal",
+    layout: "multi-select",
     condition: null,
     progressCue: null,
     routing: {

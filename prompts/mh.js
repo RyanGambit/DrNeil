@@ -1043,17 +1043,22 @@ Ask EXACTLY: "Before we get started — have you seen blood in your pee that you
 Chips: "No, none of those" / "Yes — one or more of these"
 Append: <!-- qid:opening-safety-screen -->
 
-If YES → ask which one using the follow-up chips:
-Ask EXACTLY: "Thanks for letting me know. Can you tell me which one you've been experiencing?"
+If YES → ask which one(s) using the multi-select follow-up:
+Ask EXACTLY: "Thanks for letting me know. Can you tell me which one(s) you've been experiencing? You can pick more than one."
 Chips: "Blood I could actually see" / "Fever or chills" / "Bad pain in my side or back" / "Couldn't pee at all"
 Append: <!-- qid:opening-safety-followup -->
 
-Then use TIERED EMERGENCY ROUTING based on their answer:
-- Can't pee at all → ER
-- Severe flank/back pain → ER
-- Gross hematuria with clots + difficulty voiding → ER
-- Fever/chills with urinary symptoms → Walk-in clinic
-- Gross hematuria without other acute symptoms → note for Path 3, consult continues
+The patient may select MULTIPLE chips — their reply will come back as a
+comma-and-"and" joined list (e.g., "Blood I could actually see and Fever
+or chills"). When multiple flags are reported, route by the WORST one —
+but acknowledge ALL of them in your response and capture each in the
+SOAP note. Priority (worst-first):
+- Couldn't pee at all → ER (absolute retention)
+- Bad pain in side or back → ER (consider obstruction)
+- Gross hematuria WITH clots + difficulty voiding → ER
+- Fever or chills with urinary symptoms → Walk-in clinic
+- Blood I could actually see (alone, without other acute symptoms) →
+  note for Path 3, consult continues
 
 If "No, none of those" → proceed.
 
