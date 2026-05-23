@@ -749,7 +749,7 @@ export default function AskDrFleshner() {
     yesGreen: "#0f7b6c", noBorder: "#d4d8e1",
     componentIndent: 52, bubbleMax: "82%",
     font: "'Söhne', -apple-system, 'Segoe UI', system-ui, sans-serif",
-    fontSize: 15, fontSmall: 13, fontTiny: 11, lineHeight: 1.6,
+    fontSize: 15, fontSmall: 15, fontTiny: 13, lineHeight: 1.6,
   };
 
   const handlePanelSubmit = (messageIndex, responseText) => {
@@ -1265,7 +1265,7 @@ export default function AskDrFleshner() {
           </div>
         )}
         <div style={{
-          fontSize: 13, color: "#5a6175", marginTop: 10, textAlign: "center",
+          fontSize: 15, color: "#5a6175", marginTop: 10, textAlign: "center",
           fontFamily: T.font,
         }}>You can also type a response below</div>
       </div>
@@ -3301,8 +3301,8 @@ export default function AskDrFleshner() {
               return pct > 0 ? (
                 <div style={{ marginBottom: 10 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 5 }}>
-                    <span style={{ fontSize: 12, color: "#506D65", fontWeight: 500 }}>{label}</span>
-                    <span style={{ fontSize: 12, color: "#506D65" }}>{pct}%</span>
+                    <span style={{ fontSize: 14, color: "#506D65", fontWeight: 500 }}>{label}</span>
+                    <span style={{ fontSize: 14, color: "#506D65" }}>{pct}%</span>
                   </div>
                   <div style={{ height: 4, background: "#D8F0EA", borderRadius: 2, overflow: "hidden" }}>
                     <div style={{
