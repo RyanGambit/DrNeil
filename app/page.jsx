@@ -3071,14 +3071,14 @@ export default function AskDrFleshner() {
                       <div
                         aria-live="polite"
                         style={{
-                          marginLeft: 48, marginTop: 4, marginBottom: 6,
-                          fontSize: 13, color: "#1A6B5B",
+                          marginLeft: 48, marginTop: 8, marginBottom: 8,
+                          fontSize: 16, color: "#1A6B5B", fontWeight: 500,
                           fontFamily: "-apple-system, 'Segoe UI', sans-serif",
-                          display: "inline-flex", alignItems: "center", gap: 6,
+                          display: "inline-flex", alignItems: "center", gap: 8,
                           animation: "hintFadeIn 0.4s ease-out",
                         }}
                       >
-                        <span aria-hidden="true" style={{ animation: "hintBounce 1.6s ease-in-out infinite", display: "inline-block" }}>↓</span>
+                        <span aria-hidden="true" style={{ fontSize: 20, animation: "hintBounce 1.6s ease-in-out infinite", display: "inline-block" }}>↓</span>
                         <span>Type your answer below</span>
                       </div>
                     );
