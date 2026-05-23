@@ -1037,7 +1037,14 @@ Ask EXACTLY: "Thanks for letting me know. Can you tell me which one you've been 
 Chips: "Chest pain during or after sex" / "Erection that wouldn't go down" / "Injury to the penis"
 Append: <!-- qid:opening-safety-followup -->
 
-Then route based on their answer → URGENT ESCALATION for all ED red flags.
+After the symptom is identified, ask about timing:
+Ask EXACTLY: "Is this something that's happening right now, or did it happen in the past?"
+Chips: "It's happening right now" / "No, it was in the past"
+Append: <!-- qid:opening-safety-timing -->
+
+Routing on timing:
+- "It's happening right now" → URGENT ESCALATION (ER for active priapism / penile injury / chest pain)
+- "No, it was in the past" → Outcome C (in-person evaluation; for priapism this is an absolute PDE5i contraindication)
 
 STEP 3 — INTERVIEW CONTRACT
 

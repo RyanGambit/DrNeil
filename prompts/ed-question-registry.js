@@ -55,7 +55,25 @@ const ED_QUESTION_REGISTRY = [
       "Erection that wouldn't go down": "urgent_escalation",
       "Injury to the penis": "urgent_escalation"
     },
-    notes: "Only shown after patient answers 'Yes — one or more of these' on opening-safety-screen. All ED red flags route to urgent escalation."
+    notes: "Only shown after patient answers 'Yes — one or more of these' on opening-safety-screen. AI then asks opening-safety-timing to determine if current (ER) or past (Outcome C)."
+  },
+
+  {
+    id: "opening-safety-timing",
+    phase: 1,
+    question: "Is this something that's happening right now, or did it happen in the past?",
+    chips: [
+      "It's happening right now",
+      "No, it was in the past"
+    ],
+    layout: "horizontal",
+    condition: null,
+    progressCue: null,
+    routing: {
+      "It's happening right now": "er_referral",
+      "No, it was in the past": "outcome_c_inperson"
+    },
+    notes: "Asked after opening-safety-followup chip selected. Current symptoms → ER (priapism/penile injury/active chest pain are emergencies). Past symptoms → Outcome C (priapism = absolute PDE5i contraindication; past chest pain → cardiology workup; past injury → Peyronie's risk)."
   },
 
   {
