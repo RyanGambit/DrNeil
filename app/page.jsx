@@ -1397,12 +1397,13 @@ export default function AskDrFleshner() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Persist transcript to KV after each new message in tester mode so
-  // the admin view sees what's happening live (and post-mortem). Throttled
-  // to once-per-message; the tail effect runs in the background and is
-  // best-effort (a KV miss doesn't break the consultation).
+  // Persist transcript to KV after each new message for BOTH tester AND
+  // patient modes so the admin view sees what's happening live (and
+  // post-mortem) for every user. Throttled to once-per-message; the tail
+  // effect runs in the background and is best-effort (a KV miss doesn't
+  // break the consultation).
   useEffect(() => {
-    if (userMode !== "tester" || !currentSessionId) return;
+    if (!currentSessionId) return;
     if (!messages.length) return;
     const trimmed = messages.map((m) => ({
       role: m.role, text: m.text || "", time: m.time || null,
@@ -1412,7 +1413,7 @@ export default function AskDrFleshner() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sessionId: currentSessionId, messages: trimmed }),
     }).catch((e) => console.warn("transcript save failed:", e));
-  }, [messages, userMode, currentSessionId]);
+  }, [messages, currentSessionId]);
 
   // Event delegation for the simulated [Schedule X] buttons inside the
   // chat log. The buttons are rendered via dangerouslySetInnerHTML so
@@ -1512,27 +1513,29 @@ export default function AskDrFleshner() {
 
     setSessionEnded(true);
 
-    // Track scenario completion for tester mode — both in local state
-    // (immediate UI update) and in KV (persists across browser restarts).
+    // Track scenario completion for tester mode (their personal
+    // "✓ Completed" badges on the scenario picker).
     if (userMode === "tester" && patientData?.name) {
       const sc = SCENARIO_DB.find(s => s.data.name === patientData.name);
       if (sc) {
         setCompletedScenarios(prev => prev.includes(sc.id) ? prev : [...prev, sc.id]);
       }
-      // Mark the KV session record complete. Idempotent — safe if the
-      // watcher fires more than once. Best-effort: a KV outage doesn't
-      // block the consultation flow.
-      if (currentSessionId) {
-        fetch("/api/sessions/complete", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            sessionId: currentSessionId,
-            turns: messages.length,
-            finalOutcome: lastAssistant.text?.slice(0, 200) || null,
-          }),
-        }).catch((e) => console.warn("sessions/complete failed:", e));
-      }
+    }
+
+    // Mark the KV session record complete for BOTH tester AND patient
+    // modes so admin sees every completion. Idempotent — safe if the
+    // watcher fires more than once. Best-effort: a KV outage doesn't
+    // block the consultation flow.
+    if (currentSessionId) {
+      fetch("/api/sessions/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sessionId: currentSessionId,
+          turns: messages.length,
+          finalOutcome: lastAssistant.text?.slice(0, 200) || null,
+        }),
+      }).catch((e) => console.warn("sessions/complete failed:", e));
     }
 
     // Kick off SOAP generation exactly once, asynchronously.
@@ -1763,31 +1766,37 @@ export default function AskDrFleshner() {
                     }}
                     disabled={!firstName || !lastName}
                     onClick={async () => {
-                      if (userMode === "tester") {
-                        // Upsert by name in Vercel KV. Returns the canonical
-                        // testerId (same name = same record) and the list of
-                        // scenarios this tester has previously completed so
-                        // we can hydrate the "✓ Completed" badges.
-                        try {
-                          const res = await fetch("/api/testers/upsert", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ firstName, lastName, role: testerRole || null }),
-                          });
-                          if (res.ok) {
-                            const data = await res.json();
-                            setTesterId(data.tester?.id || null);
-                            setCompletedScenarios(Array.isArray(data.completedScenarios) ? data.completedScenarios : []);
-                          } else {
-                            // Don't block the demo on a KV outage — fall back to
-                            // a session-local id so the rest of the flow still works.
-                            console.warn("testers/upsert failed, using session-local id");
-                            setTesterId(`tester-local-${Date.now()}`);
-                          }
-                        } catch (e) {
-                          console.warn("testers/upsert error, using session-local id", e);
+                      // Upsert by name in Vercel KV for BOTH modes so admin
+                      // sees every user, not just testers. Patient-mode users
+                      // get mode="patient" and no role; testers get mode=
+                      // "tester" with their selected role. Same record is
+                      // re-used if a returning user picks the other mode.
+                      try {
+                        const res = await fetch("/api/testers/upsert", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            firstName,
+                            lastName,
+                            role: userMode === "tester" ? (testerRole || null) : null,
+                            mode: userMode === "tester" ? "tester" : "patient",
+                          }),
+                        });
+                        if (res.ok) {
+                          const data = await res.json();
+                          setTesterId(data.tester?.id || null);
+                          setCompletedScenarios(Array.isArray(data.completedScenarios) ? data.completedScenarios : []);
+                        } else {
+                          // Don't block the demo on a KV outage — fall back to
+                          // a session-local id so the rest of the flow still works.
+                          console.warn("testers/upsert failed, using session-local id");
                           setTesterId(`tester-local-${Date.now()}`);
                         }
+                      } catch (e) {
+                        console.warn("testers/upsert error, using session-local id", e);
+                        setTesterId(`tester-local-${Date.now()}`);
+                      }
+                      if (userMode === "tester") {
                         // Default to Test Scenarios — the tester happy path.
                         setUploadMode("scenario");
                       }
@@ -2006,10 +2015,12 @@ export default function AskDrFleshner() {
   const launchChat = () => {
     setStep("chat");
 
-    // Tester mode — record session start in KV so the admin view and the
-    // "Completed" badges have something to read. Best-effort: if KV is
-    // unreachable we still proceed, the consultation just won't be logged.
-    if (userMode === "tester" && testerId) {
+    // Record session start in KV for both tester AND patient modes so the
+    // admin view sees everyone. Patient-mode sessions have scenarioId=null
+    // unless they happen to be using a built-in scenario file. Best-effort:
+    // if KV is unreachable we still proceed, the consultation just won't
+    // be logged.
+    if (testerId) {
       const scenarioId = SCENARIO_DB.find(s => s.data.name === patientData?.name)?.id || null;
       fetch("/api/sessions/start", {
         method: "POST",
