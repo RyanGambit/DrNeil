@@ -653,6 +653,12 @@ export default function AskDrFleshner() {
   // Restart-confirmation modal. Shown when the patient clicks "Restart" in
   // the chat header. Discards all consultation state and returns to upload.
   const [showRestartConfirm, setShowRestartConfirm] = useState(false);
+  // Pause modal. Shown when the patient clicks "Need to pause" during a
+  // chip-only turn (text input is hidden during those turns to keep
+  // clinical routing deterministic; this is the escape hatch for
+  // emergencies, confusion, or corrections).
+  const [showPauseModal, setShowPauseModal] = useState(false);
+  const [pauseInput, setPauseInput] = useState("");
   const [uploadMode, setUploadMode] = useState("scenario"); // "file" | "scenario" | "build"
   // userMode is "patient" (the original flow — file upload, build, scenarios)
   // or "tester" (a clinician/reviewer evaluating the tool — scenarios + build only,
@@ -3200,6 +3206,94 @@ export default function AskDrFleshner() {
         </div>
       )}
 
+      {/* Pause modal. Shown when the patient clicks "Need to pause" during a
+          chip-only turn. One-shot text input → sends as a normal chat message
+          (so the AI's <patient_interrupts> rules handle it) → modal closes →
+          chip panel re-renders after the AI replies. */}
+      {showPauseModal && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pause-modal-title"
+          style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            zIndex: 1000, padding: 16,
+          }}
+          onClick={() => setShowPauseModal(false)}
+        >
+          <div
+            style={{
+              background: "#fff", borderRadius: 12, padding: 24,
+              maxWidth: 520, width: "100%", boxShadow: "0 10px 40px rgba(0,0,0,0.2)",
+              fontFamily: "-apple-system, 'Segoe UI', sans-serif",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 id="pause-modal-title" style={{ margin: "0 0 8px", fontSize: 18, color: "#1F2937" }}>
+              Pause and ask
+            </h3>
+            <p style={{ margin: "0 0 16px", fontSize: 14, color: "#506D65", lineHeight: 1.5 }}>
+              Use this if you have an emergency, don't understand the question, or need to
+              correct something you said earlier. Your message will go to Dr. Fleshner and
+              then we'll bring you back to the same question.
+            </p>
+            <textarea
+              value={pauseInput}
+              onChange={(e) => setPauseInput(e.target.value)}
+              placeholder="Type your message…"
+              rows={4}
+              autoFocus
+              style={{
+                width: "100%", padding: "10px 12px", borderRadius: 8,
+                border: "1.5px solid #D8F0EA", fontSize: 15,
+                fontFamily: "inherit", resize: "vertical", marginBottom: 16,
+                boxSizing: "border-box",
+              }}
+            />
+            <div style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
+              <button
+                type="button"
+                onClick={() => setShowPauseModal(false)}
+                style={{
+                  padding: "10px 18px", minHeight: 44, borderRadius: 22,
+                  background: "transparent", border: "1.5px solid #506D65",
+                  color: "#506D65", fontWeight: 600, fontSize: 15, cursor: "pointer",
+                  fontFamily: "-apple-system, 'Segoe UI', sans-serif",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={!pauseInput.trim() || isLoading}
+                onClick={() => {
+                  const text = pauseInput.trim();
+                  if (!text || isLoading) return;
+                  setShowPauseModal(false);
+                  setPauseInput("");
+                  // Send directly through sendToAPI — the existing handler
+                  // closes over a stale `input` state, so we bypass it and
+                  // hand the text in explicitly. The AI's
+                  // <patient_interrupts> rules take it from here.
+                  sendToAPI(messages, text);
+                }}
+                style={{
+                  padding: "10px 18px", minHeight: 44, borderRadius: 22,
+                  background: pauseInput.trim() && !isLoading ? "#1A6B5B" : "#cfd6d3",
+                  color: "#fff", border: "none",
+                  fontWeight: 600, fontSize: 15,
+                  cursor: pauseInput.trim() && !isLoading ? "pointer" : "not-allowed",
+                  fontFamily: "-apple-system, 'Segoe UI', sans-serif",
+                }}
+              >
+                Send to Dr. Fleshner
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main area: Chat + Dashboard */}
       <main role="main" aria-label="Consultation" style={{ flex: 1, display: "flex", overflow: "hidden", position: "relative" }}>
         {/* Chat column */}
@@ -3560,30 +3654,87 @@ export default function AskDrFleshner() {
                   </button>
                 )}
               </div>
-            ) : (
-              <div style={styles.inputRow}>
-                <label htmlFor="chat-input" className="sr-only">Type your reply to Dr. Fleshner</label>
-                <textarea
-                  id="chat-input"
-                  aria-label="Type your reply to Dr. Fleshner"
-                  style={styles.chatInput}
-                  value={input}
-                  onChange={(e) => { setInput(e.target.value); }}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Type your reply…"
-                  rows={1}
-                />
-                <button
-                  type="button"
-                  aria-label="Send message"
-                  style={{ ...styles.sendBtn, width: 44, height: 44, opacity: input.trim() && !isLoading ? 1 : 0.4 }}
-                  onClick={handleSend}
-                  disabled={!input.trim() || isLoading}
-                >
-                  <span aria-hidden="true">↑</span>
-                </button>
-              </div>
-            )}
+            ) : (() => {
+              // ── Contextual input mode ──
+              // When the most recent AI message has an active chip panel
+              // (chips on offer + not yet submitted), the patient's next
+              // action MUST be a chip click — typing free text in that
+              // state lets the AI silently re-interpret a clinical answer
+              // and drift the routing. Hide the chat input and surface a
+              // pause button instead for emergencies / clarification /
+              // mid-flow corrections.
+              //
+              // Open text remains the default for every other turn —
+              // the consultation's own open-ended questions (intake age,
+              // allergies, meds, family details if not yet chip-ified,
+              // etc.) plus general "I have a question" moments.
+              let inputMode = "text";
+              if ((detectedCondition === "ed" || detectedCondition === "bph" || detectedCondition === "mh") && displayMessages.length > 0) {
+                let lastAssistantIdx = -1;
+                for (let k = displayMessages.length - 1; k >= 0; k--) {
+                  if (displayMessages[k].role === "assistant") { lastAssistantIdx = k; break; }
+                }
+                if (lastAssistantIdx >= 0) {
+                  const entry = resolveEntry(displayMessages[lastAssistantIdx], displayMessages, lastAssistantIdx, detectedCondition);
+                  const panelSubmitted = !!panelStates[lastAssistantIdx]?.submitted;
+                  // Confirm panel has its own submit flow — keep input open
+                  // so the patient can still "type below" if they prefer.
+                  if (entry?.chips && !panelSubmitted && entry.type !== "confirm-panel") {
+                    inputMode = "chips-only";
+                  }
+                }
+              }
+
+              if (inputMode === "chips-only") {
+                return (
+                  <div style={{ ...styles.inputRow, flexDirection: "column", alignItems: "stretch", gap: 8 }}>
+                    <div style={{
+                      fontSize: 13, color: "#506D65", textAlign: "center", fontFamily: "-apple-system, 'Segoe UI', sans-serif",
+                    }}>
+                      Tap an option above. If you have a question, emergency, or need to correct something, use the button below.
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { setPauseInput(""); setShowPauseModal(true); }}
+                      style={{
+                        padding: "12px 18px", minHeight: 44, borderRadius: 22,
+                        border: "1.5px solid #b87600", background: "#FFF8EE", color: "#b87600",
+                        fontWeight: 600, fontSize: 15, cursor: "pointer",
+                        fontFamily: "-apple-system, 'Segoe UI', sans-serif",
+                        display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+                      }}
+                    >
+                      <span aria-hidden="true">⚠</span> Need to pause
+                    </button>
+                  </div>
+                );
+              }
+
+              return (
+                <div style={styles.inputRow}>
+                  <label htmlFor="chat-input" className="sr-only">Type your reply to Dr. Fleshner</label>
+                  <textarea
+                    id="chat-input"
+                    aria-label="Type your reply to Dr. Fleshner"
+                    style={styles.chatInput}
+                    value={input}
+                    onChange={(e) => { setInput(e.target.value); }}
+                    onKeyDown={handleKeyDown}
+                    placeholder="Type your reply…"
+                    rows={1}
+                  />
+                  <button
+                    type="button"
+                    aria-label="Send message"
+                    style={{ ...styles.sendBtn, width: 44, height: 44, opacity: input.trim() && !isLoading ? 1 : 0.4 }}
+                    onClick={handleSend}
+                    disabled={!input.trim() || isLoading}
+                  >
+                    <span aria-hidden="true">↑</span>
+                  </button>
+                </div>
+              );
+            })()}
           </div>
         </div>
 

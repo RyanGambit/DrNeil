@@ -91,10 +91,12 @@ marker on ALL of these:
 - "And roughly how many years?" → <!-- qid:risk-q1b-smoking-years -->
 - "How long ago did you quit?" → <!-- qid:risk-q1c-smoking-quit -->
 - "When was the last time that happened?" → <!-- qid:risk-q2a-gross-when -->
-- "Who in the family, and which type of cancer?" → <!-- qid:risk-q5a-family-details -->
+- "Who was it? You can pick more than one." → <!-- qid:risk-q5a-family-who -->
+- "What kind of cancer? Pick all that apply." → <!-- qid:risk-q5b-family-type -->
 - "Was it confirmed with a urine culture..." → <!-- qid:risk-q9a-uti-culture -->
 - "Was a urine test repeated after..." → <!-- qid:risk-q9b-uti-repeat-ua -->
-- "Do you remember what tests were done..." → <!-- qid:risk-q11a-prior-workup -->
+- "What kind of tests? Pick all that apply." → <!-- qid:risk-q11a-prior-workup-tests -->
+- "How long ago were those tests done?" → <!-- qid:risk-q11b-prior-workup-when -->
 
 Before you send any message that contains a "?", check: am I asking a
 predefined question? If yes, the marker MUST be at the end.
@@ -122,7 +124,7 @@ but the interface needs the marker to show acknowledgment chips:
 - After Path 3 Message 1 (assessment): <!-- qid:outcome-path3-ack-1 -->
 - After Path 3 Message 2 (plan): <!-- qid:outcome-path3-ack-2 -->
 
-For open-text questions (Q5a family details, Q11a prior workup details, age),
+For open-text questions (age, and any open-ended description the patient may add),
 still append the marker. The interface will not render chips but will know
 which question was asked.
 
@@ -1281,15 +1283,28 @@ Ask EXACTLY: "Has anyone in your family had bladder cancer, kidney cancer, or co
 Chips: "No" / "Yes" / "Not sure"
 Append: <!-- qid:risk-q5-family-history -->
 
-IF "Yes": ask follow-up:
+IF "Yes": ask TWO chip follow-ups in sequence (both multi-select):
 
-Q5a — Ask EXACTLY: "Who in the family, and which type of cancer?"
-(open text — no chips)
-Append: <!-- qid:risk-q5a-family-details -->
+Q5a — Ask EXACTLY: "Who was it? You can pick more than one."
+Chips: "Parent, sibling, or child" / "Aunt, uncle, grandparent, or cousin" / "Not sure who"
+Append: <!-- qid:risk-q5a-family-who -->
+(Patient may select multiple — reply will come back as a joined list,
+e.g., "Parent, sibling, or child and Aunt, uncle, grandparent, or cousin".)
 
-Determine if Lynch syndrome or hereditary renal cancer syndrome applies. Lynch or hereditary kidney cancer → Path 3 trigger. Urothelial/bladder cancer in family → additional Path 2 risk factor.
+Q5b — After Q5a, ask EXACTLY: "What kind of cancer? Pick all that apply."
+Chips: "Bladder cancer" / "Kidney cancer" / "Colon or rectal cancer" / "Endometrial or uterine cancer" / "Other or not sure"
+Append: <!-- qid:risk-q5b-family-type -->
+(Patient may select multiple.)
 
-IF "No" or "Not sure": move on.
+DETERMINISTIC LYNCH CHECK (run after Q5b):
+- IF Q5a included "Parent, sibling, or child" (first-degree)
+  AND Q5b included any of: Bladder, Colon or rectal, Endometrial or uterine
+  → Lynch syndrome criteria met → Path 3 trigger
+- Kidney cancer in any relative → high-risk note for the chart, not Lynch on its own
+- Urothelial/bladder cancer in second-degree relative only → additional Path 2 risk factor, not Lynch
+- Anything else → record family history in chart, continue
+
+IF "No" or "Not sure" on Q5: move on.
 
 ---
 
@@ -1312,8 +1327,21 @@ Chips: "No" / "Yes" / "I've had chemo but don't know the drug"
 Append: <!-- qid:risk-q7-chemo -->
 
 IF "Yes": Path 3 trigger.
-IF "I've had chemo but don't know the drug": ask what cancer it was for and use clinical judgment. If the cancer type makes cyclophosphamide/ifosfamide plausible → treat as Path 3.
-IF "No": move on.
+
+IF "I've had chemo but don't know the drug": ask the chip follow-up below.
+
+Q7a — Ask EXACTLY: "What were you treated for? Pick the closest match."
+Chips: "Lymphoma" / "Breast cancer" / "An autoimmune condition like lupus or vasculitis" / "A different cancer" / "I don't remember"
+Append: <!-- qid:risk-q7a-chemo-cancer-type -->
+
+DETERMINISTIC ROUTING on Q7a:
+- "Lymphoma" → Path 3 trigger (cyclophosphamide is standard for CHOP and similar regimens)
+- "Breast cancer" → Path 3 trigger (cyclophosphamide is in AC and TC regimens)
+- "An autoimmune condition like lupus or vasculitis" → Path 3 trigger (cyclophosphamide is used for severe lupus nephritis, vasculitis, etc.)
+- "A different cancer" → high-risk note for the chart, flag for in-person clarification, do NOT auto-trigger Path 3
+- "I don't remember" → high-risk note for the chart, flag for in-person clarification, do NOT auto-trigger Path 3
+
+IF "No" on Q7: move on.
 
 ---
 
@@ -1371,13 +1399,23 @@ Append: <!-- qid:risk-q11-prior-evaluation -->
 
 IF "Found before, but never investigated": persistent MH → Path 2 at minimum.
 
-IF "Found before, and I had tests done": ask follow-up.
+IF "Found before, and I had tests done": ask TWO chip follow-ups in sequence.
 
-Q11a — Ask EXACTLY: "Do you remember what tests were done and roughly when?"
-(open text — no chips)
-Append: <!-- qid:risk-q11a-prior-workup -->
+Q11a — Ask EXACTLY: "What kind of tests? Pick all that apply."
+Chips: "Camera test into the bladder (cystoscopy)" / "Imaging scan (CT, MRI, or ultrasound)" / "Urine test for cancer cells (cytology)" / "I'm not sure what they did"
+Append: <!-- qid:risk-q11a-prior-workup-tests -->
+(Multi-select — reply will come back as a joined list.)
 
-CRITICAL: If full workup (cystoscopy + imaging + cytology) was completed within 1 year AND hematuria persists → Outcome C (too complex, needs in-person). If >1 year or incomplete workup → proceed with new evaluation.
+Q11b — After Q11a, ask EXACTLY: "How long ago were those tests done?"
+Chips: "Within the last year" / "1 to 3 years ago" / "More than 3 years ago" / "Not sure"
+Append: <!-- qid:risk-q11b-prior-workup-when -->
+
+DETERMINISTIC ROUTING (run after Q11b):
+- IF Q11a included ALL THREE: cystoscopy AND imaging AND cytology
+  AND Q11b is "Within the last year"
+  → Complete recent workup with persistent hematuria → Outcome C (no need to repeat)
+- Otherwise (any missing test, "I'm not sure", or workup >1 year old)
+  → Incomplete or stale workup → proceed with new evaluation per the patient's risk profile
 
 IF "No, this is the first time": move on.
 

@@ -342,21 +342,52 @@ const MH_QUESTION_REGISTRY = [
     progressCue: null,
     routing: {
       "No": "continue",
-      "Yes": "ask_family_details",
+      "Yes": "ask_family_who",
       "Not sure": "continue"
     },
-    notes: "If Yes → follow up to determine type. Lynch syndrome or genetic renal cancer syndrome → Path 3 trigger."
+    notes: "If Yes → ask family-who, then family-type. Lynch syndrome (first-degree + bladder OR colon OR endometrial) → Path 3 trigger."
   },
   {
-    id: "risk-q5a-family-details",
+    id: "risk-q5a-family-who",
     phase: 3,
-    question: "Who in the family, and which type of cancer?",
-    chips: null,
-    layout: null,
+    question: "Who was it? You can pick more than one.",
+    chips: [
+      "Parent, sibling, or child",
+      "Aunt, uncle, grandparent, or cousin",
+      "Not sure who"
+    ],
+    layout: "multi-select",
     condition: "family_history == Yes",
     progressCue: null,
-    routing: null,
-    notes: "Open text. AI determines if Lynch syndrome or genetic renal syndrome applies. Lynch or hereditary kidney cancer → Path 3."
+    routing: {
+      "Parent, sibling, or child": "first_degree_yes",
+      "Aunt, uncle, grandparent, or cousin": "second_degree_only",
+      "Not sure who": "second_degree_only"
+    },
+    notes: "First-degree (parent/sibling/child) is the Lynch-relevant group. After this, always ask risk-q5b-family-type."
+  },
+  {
+    id: "risk-q5b-family-type",
+    phase: 3,
+    question: "What kind of cancer? Pick all that apply.",
+    chips: [
+      "Bladder cancer",
+      "Kidney cancer",
+      "Colon or rectal cancer",
+      "Endometrial or uterine cancer",
+      "Other or not sure"
+    ],
+    layout: "multi-select",
+    condition: "family_history == Yes",
+    progressCue: null,
+    routing: {
+      "Bladder cancer": "lynch_candidate",
+      "Kidney cancer": "high_risk_note",
+      "Colon or rectal cancer": "lynch_candidate",
+      "Endometrial or uterine cancer": "lynch_candidate",
+      "Other or not sure": "high_risk_note"
+    },
+    notes: "Deterministic Lynch check: if family-who included 'Parent, sibling, or child' AND any of bladder/colon/endometrial here → Lynch criteria met → Path 3. Otherwise → high-risk note, continue. Kidney cancer in any relative → high-risk note even without Lynch."
   },
 
   {
@@ -390,9 +421,33 @@ const MH_QUESTION_REGISTRY = [
     routing: {
       "No": "continue",
       "Yes": "path_3_trigger",
-      "I've had chemo but don't know the drug": "follow_up_chemo_type"
+      "I've had chemo but don't know the drug": "ask_chemo_cancer_type"
     },
-    notes: "Cyclophosphamide/ifosfamide = Path 3 trigger. If they don't know the drug, AI asks what cancer it was for and uses clinical judgment."
+    notes: "Cyclophosphamide/ifosfamide = Path 3 trigger. If they don't know the drug, ask risk-q7a-chemo-cancer-type to infer from the cancer treated."
+  },
+
+  {
+    id: "risk-q7a-chemo-cancer-type",
+    phase: 3,
+    question: "What were you treated for? Pick the closest match.",
+    chips: [
+      "Lymphoma",
+      "Breast cancer",
+      "An autoimmune condition like lupus or vasculitis",
+      "A different cancer",
+      "I don't remember"
+    ],
+    layout: "horizontal",
+    condition: "chemo == dont_know_drug",
+    progressCue: null,
+    routing: {
+      "Lymphoma": "path_3_trigger",
+      "Breast cancer": "path_3_trigger",
+      "An autoimmune condition like lupus or vasculitis": "path_3_trigger",
+      "A different cancer": "high_risk_note_inperson_clarify",
+      "I don't remember": "high_risk_note_inperson_clarify"
+    },
+    notes: "Cyclophosphamide is commonly used for lymphoma, breast cancer, and autoimmune conditions (lupus, vasculitis, etc). Patients treated for these are highly likely to have received it → Path 3. Different cancer or unknown → flag for in-person clarification, do NOT auto-trigger Path 3."
   },
 
   {
@@ -473,20 +528,51 @@ const MH_QUESTION_REGISTRY = [
     routing: {
       "No, this is the first time": "first_occurrence",
       "Found before, but never investigated": "recurrent_not_evaluated",
-      "Found before, and I had tests done": "ask_prior_workup_details"
+      "Found before, and I had tests done": "ask_prior_workup_tests"
     },
     notes: "CRITICAL: If prior full workup (cystoscopy + imaging + cytology) within 1 year and still has hematuria → Outcome C (too complex, needs in-person). If found before but not investigated → persistent MH = Path 2 at minimum."
   },
   {
-    id: "risk-q11a-prior-workup",
+    id: "risk-q11a-prior-workup-tests",
     phase: 3,
-    question: "Do you remember what tests were done and roughly when?",
-    chips: null,
-    layout: null,
+    question: "What kind of tests? Pick all that apply.",
+    chips: [
+      "Camera test into the bladder (cystoscopy)",
+      "Imaging scan (CT, MRI, or ultrasound)",
+      "Urine test for cancer cells (cytology)",
+      "I'm not sure what they did"
+    ],
+    layout: "multi-select",
     condition: "prior_evaluation == tests_done",
     progressCue: null,
-    routing: null,
-    notes: "Open text. AI determines if full workup was completed within 1 year. If yes → Outcome C. If >1 year or incomplete workup → proceed with new evaluation."
+    routing: {
+      "Camera test into the bladder (cystoscopy)": "test_recorded",
+      "Imaging scan (CT, MRI, or ultrasound)": "test_recorded",
+      "Urine test for cancer cells (cytology)": "test_recorded",
+      "I'm not sure what they did": "incomplete_workup"
+    },
+    notes: "Multi-select. After this, ask risk-q11b-prior-workup-when. 'Complete' workup = ALL THREE tests (cystoscopy AND imaging AND cytology). 'I'm not sure' on its own → incomplete workup → proceed with new evaluation."
+  },
+  {
+    id: "risk-q11b-prior-workup-when",
+    phase: 3,
+    question: "How long ago were those tests done?",
+    chips: [
+      "Within the last year",
+      "1 to 3 years ago",
+      "More than 3 years ago",
+      "Not sure"
+    ],
+    layout: "horizontal",
+    condition: "prior_evaluation == tests_done",
+    progressCue: null,
+    routing: {
+      "Within the last year": "workup_recent",
+      "1 to 3 years ago": "workup_older",
+      "More than 3 years ago": "workup_older",
+      "Not sure": "workup_older"
+    },
+    notes: "DETERMINISTIC: If Q11a included ALL THREE (cystoscopy AND imaging AND cytology) AND Q11b is 'Within the last year' → complete recent workup → Outcome C (no repeat). Otherwise → proceed with new evaluation."
   },
 
   // =========================================================================

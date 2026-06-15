@@ -458,13 +458,44 @@ const ED_QUESTION_REGISTRY = [
   {
     id: "clinical-q7a-which-pill",
     phase: 4,
-    question: "Which pill did you try — and the dose, if you remember?",
-    chips: null,
-    layout: null,
+    question: "Which pill did you try? Pick any you've used.",
+    chips: [
+      "Sildenafil (Viagra)",
+      "Tadalafil (Cialis)",
+      "Another PDE5i pill",
+      "I'm not sure which one"
+    ],
+    layout: "multi-select",
     condition: "prior_treatment == Yes",
     progressCue: null,
-    routing: null,
-    notes: "If they don't know the dose → assume inadequate trial."
+    routing: {
+      "Sildenafil (Viagra)": "sildenafil_recorded",
+      "Tadalafil (Cialis)": "tadalafil_recorded",
+      "Another PDE5i pill": "other_pde5i_recorded",
+      "I'm not sure which one": "unknown_pill"
+    },
+    notes: "Multi-select — patient may have tried more than one. After this, always ask clinical-q7a2-pill-dose. Pill identity matters for q7c (food only matters for sildenafil) and for q7a2 (max dose is pill-specific: sildenafil 100mg, tadalafil 20mg)."
+  },
+  {
+    id: "clinical-q7a2-pill-dose",
+    phase: 4,
+    question: "What's the highest dose you ever tried?",
+    chips: [
+      "A small dose (25 mg sildenafil or 5 mg tadalafil)",
+      "A medium dose (50 mg sildenafil or 10 mg tadalafil)",
+      "The maximum dose (100 mg sildenafil or 20 mg tadalafil)",
+      "I don't remember the dose"
+    ],
+    layout: "horizontal",
+    condition: "prior_treatment == Yes",
+    progressCue: null,
+    routing: {
+      "A small dose (25 mg sildenafil or 5 mg tadalafil)": "subtherapeutic_dose_inadequate_trial",
+      "A medium dose (50 mg sildenafil or 10 mg tadalafil)": "submaximal_dose",
+      "The maximum dose (100 mg sildenafil or 20 mg tadalafil)": "max_dose_recorded",
+      "I don't remember the dose": "unknown_dose_inadequate_trial"
+    },
+    notes: "DETERMINISTIC ADEQUACY (run after q7b-how-many): max dose AND 6+ attempts → adequate trial → Outcome C (in-person for second-line). Anything else → inadequate trial → still first-line eligible for our preferred PDE5i."
   },
   {
     id: "clinical-q7b-how-many",

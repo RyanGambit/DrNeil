@@ -61,6 +61,7 @@ because the question is short or feels like a natural continuation.
 Examples of brief questions that often get missed — these ALL need markers:
 - "And roughly how many years?" → <!-- qid:intake-smoking-years -->
 - "How long ago did you quit?" → <!-- qid:intake-smoking-quit -->
+- "What's the highest dose you ever tried?" → <!-- qid:clinical-q7a2-pill-dose -->
 - "How many times did you try it?" → <!-- qid:clinical-q7b-how-many -->
 - "Sound good so far?" → <!-- qid:outcome-b-ack-1 -->
 - "Any questions about that?" → <!-- qid:outcome-b-ack-2 -->
@@ -1415,14 +1416,18 @@ IF NO, never tried anything → First-line. Note this. Move to Q8.
 
 IF YES, I've tried something → MUST determine adequacy (sub-sequence, one at a time):
 
-7a) Ask EXACTLY: "Which pill did you try — and the dose, if you remember?"
-    (open text — no chips)
+7a) Ask EXACTLY: "Which pill did you try? Pick any you've used."
+    Chips: "Sildenafil (Viagra)" / "Tadalafil (Cialis)" / "Another PDE5i pill" / "I'm not sure which one"
     Append: <!-- qid:clinical-q7a-which-pill -->
+    (Multi-select — patient may have tried more than one. Reply comes back as a joined list.)
+7a2) Ask EXACTLY: "What's the highest dose you ever tried?"
+    Chips: "A small dose (25 mg sildenafil or 5 mg tadalafil)" / "A medium dose (50 mg sildenafil or 10 mg tadalafil)" / "The maximum dose (100 mg sildenafil or 20 mg tadalafil)" / "I don't remember the dose"
+    Append: <!-- qid:clinical-q7a2-pill-dose -->
 7b) Ask EXACTLY: "How many times did you try it?"
     Chips: "Just once or twice" / "3–5 times" / "6 or more times"
     Append: <!-- qid:clinical-q7b-how-many -->
     - <4 attempts = inadequate
-7c) Ask EXACTLY: "Did you take it on an empty stomach or after a big meal?" (only for sildenafil)
+7c) Ask EXACTLY: "Did you take it on an empty stomach or after a big meal?" (only ask if Q7a included Sildenafil)
     Chips: "Empty or light stomach" / "After a meal" / "Don't remember"
     Append: <!-- qid:clinical-q7c-food -->
 7d) Ask EXACTLY: "How long before sex did you take it?"
@@ -1437,13 +1442,22 @@ IF YES, I've tried something → MUST determine adequacy (sub-sequence, one at a
     All chip answers are valid — record and continue. "Something else" is a
     complete answer, no follow-up needed.
 
-ADEQUACY DETERMINATION:
-- Inadequate trial (low dose, <4 tries, wrong food/timing, no arousal, unrealistic expectations)
-  → "It sounds like you may not have given it a proper shot. Worth trying again the right way."
-  → Outcome B eligible (re-trial with counselling)
-- Adequate trial and failed (proper dose, proper use, 4+ tries, still didn't work)
-  → "You gave it a good try. We need to look at next options — best done in person."
-  → Outcome C (PDE5i failure)
+DETERMINISTIC ADEQUACY DETERMINATION (run after q7b):
+- ADEQUATE TRIAL (Outcome C — in-person for second-line):
+  All of: Q7a2 = "The maximum dose" AND Q7b = "6 or more times" AND
+  Q7d ≠ "Less than 15 minutes" AND Q7e = "Yes" AND
+  (if sildenafil) Q7c ≠ "After a meal"
+- INADEQUATE TRIAL (Outcome B — re-trial with counselling):
+  Any of: Q7a2 = "A small dose" or "I don't remember the dose"
+  OR Q7b = "Just once or twice"
+  OR Q7d = "Less than 15 minutes"
+  OR Q7e = "No, I just took it and waited"
+  OR (sildenafil with Q7c = "After a meal")
+- "3–5 times" or "A medium dose" with otherwise-good technique → borderline, default to Outcome B (re-trial) and document the borderline call.
+
+Closing language:
+- Inadequate trial → "It sounds like you may not have given it a proper shot. Worth trying again the right way."
+- Adequate trial and failed → "You gave it a good try. We need to look at next options — best done in person."
 
 SOURCE: AUA "prior use of erectogenic therapy" + AUA Statement 9 "instructions should be provided to maximize benefit/efficacy"
 
