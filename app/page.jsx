@@ -3669,7 +3669,12 @@ export default function AskDrFleshner() {
               // allergies, meds, family details if not yet chip-ified,
               // etc.) plus general "I have a question" moments.
               let inputMode = "text";
-              if ((detectedCondition === "ed" || detectedCondition === "bph" || detectedCondition === "mh") && displayMessages.length > 0) {
+              // Lock the input while the AI is responding so the patient
+              // can't squeeze a free-text answer into the gap between
+              // their chip click and the next AI message landing.
+              if (isLoading) {
+                inputMode = "loading";
+              } else if ((detectedCondition === "ed" || detectedCondition === "bph" || detectedCondition === "mh") && displayMessages.length > 0) {
                 let lastAssistantIdx = -1;
                 for (let k = displayMessages.length - 1; k >= 0; k--) {
                   if (displayMessages[k].role === "assistant") { lastAssistantIdx = k; break; }
@@ -3682,6 +3687,16 @@ export default function AskDrFleshner() {
                   if (entry?.chips && !panelSubmitted && entry.type !== "confirm-panel") {
                     inputMode = "chips-only";
                   }
+                }
+                // After a chip click, the latest message is the user's chip
+                // response and panelStates[prevAssistant].submitted is true,
+                // but the next AI message hasn't arrived yet. Don't reopen
+                // the text input in this gap — wait for the next AI turn
+                // and re-derive the mode then. (isLoading already covers the
+                // network leg; this covers any micro-render in between.)
+                const lastMsg = displayMessages[displayMessages.length - 1];
+                if (inputMode === "text" && lastMsg?.role === "user") {
+                  inputMode = "loading";
                 }
               }
 
@@ -3706,6 +3721,23 @@ export default function AskDrFleshner() {
                     >
                       <span aria-hidden="true">⚠</span> Need to pause
                     </button>
+                  </div>
+                );
+              }
+
+              if (inputMode === "loading") {
+                return (
+                  <div style={{
+                    ...styles.inputRow,
+                    justifyContent: "center", alignItems: "center",
+                    minHeight: 56,
+                  }}>
+                    <span style={{
+                      fontSize: 14, color: "#506D65", fontStyle: "italic",
+                      fontFamily: "-apple-system, 'Segoe UI', sans-serif",
+                    }}>
+                      Dr. Fleshner is responding…
+                    </span>
                   </div>
                 );
               }
